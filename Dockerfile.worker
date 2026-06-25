@@ -1,0 +1,50 @@
+# =============================================================================
+# eval-engine Celery Worker
+# Dockerfile.worker
+#
+# Builds a minimal Python image with eval-engine installed.
+# Used by docker-compose.yml worker service.
+#
+# Build: docker build -f Dockerfile.worker -t eval-engine-worker .
+# =============================================================================
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# System deps (minimal — no GPU needed for worker; LLM calls are API-based)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files first (layer cache — only rebuilds on dep changes)
+COPY pyproject.toml ./
+COPY eval_engine/ ./eval_engine/
+
+# Install eval-engine + Celery + Redis client
+# Note: [safety] extras (transformers/torch) not included by default —
+# LlamaGuard runs on the host or a separate GPU-enabled service.
+RUN pip install --no-cache-dir -e "." && \
+    pip install --no-cache-dir \
+        celery[redis]>=5.3.0 \
+        flower>=2.0.0 \
+        langchain-anthropic>=0.1.0 \
+        langchain-openai>=0.1.0
+
+# Create output directory
+RUN mkdir -p /app/outputs /app/configs /app/datasets
+
+# Non-root user for security
+RUN useradd -m -u 1000 worker && chown -R worker:worker /app
+USER worker
+
+# Health check — verify Celery can connect to Redis
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD celery -A eval_engine.orchestration.celery_tasks inspect ping \
+        --destination worker@$(hostname) || exit 1
+
+# Default command (overridden by docker-compose)
+CMD ["celery", "-A", "eval_engine.orchestration.celery_tasks", "worker", \
+     "--loglevel=info", "--concurrency=4", "--queues=debates"]

@@ -1,0 +1,52 @@
+# configs/centralized_baseline.yaml
+#
+# Centralized RAG Baseline Evaluation
+# Compare against decentralized architecture
+#
+# Run: verity run --config configs/centralized_baseline.yaml
+
+experiment_id: centralized_baseline_v01
+architecture: centralized
+model: claude-sonnet-4-6
+
+dataset:
+  path: datasets/eval_set.json
+  format: json
+  question_col: question
+  context_col: contexts
+  answer_col: answer
+  ground_truth_col: ground_truth
+  sample_n: null
+
+metrics:
+  - name: ndcg
+    enabled: true
+    k: 10
+
+  - name: ragas_grounding
+    enabled: true
+
+  - name: llamaguard_safety
+    enabled: true
+    kwargs:
+      mode: local
+      quantize: true
+
+budget:
+  max_usd: 2.00
+  warn_at_pct: 0.80
+  track_tokens: true
+
+async_cfg:
+  max_concurrent_queries: 5
+  batch_size: 25
+  timeout_seconds: 30.0
+
+statistics:
+  tests: [wilcoxon, cohens_d, pearson]
+  alpha: 0.05
+  save_figures: true
+  figures_dir: outputs/figures
+
+output_dir: outputs
+notes: "Centralized RAG baseline. Compare against decentralized architecture."
