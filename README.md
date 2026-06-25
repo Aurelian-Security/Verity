@@ -1,54 +1,178 @@
-# Verity Evaluation Engine
+# Verity
 
-**Verity** is an open-source AI assurance and RAG evaluation platform built by [Aurelian Security](https://github.com/Aurelian-Security).
+**Verity is an asynchronous, multi-agent alignment evaluation and threat modeling infrastructure suite for RAG architectures** — CLI-driven, statistically rigorous, and built for AI assurance research.
 
-Verity provides evaluation infrastructure for consolidation-based and adversarial RAG architectures — CLI-driven, async-batched, with pluggable metric configs, multi-agent oversight, distributed orchestration, statistical analysis, and per-run cost/token accounting.
+[![CI](https://github.com/Aurelian-Security/Verity/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurelian-Security/Verity/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Pydantic v2](https://img.shields.io/badge/pydantic-v2-green)](https://docs.pydantic.dev/latest/)
+[![Status: Pre-1.0 Research Infrastructure](https://img.shields.io/badge/status-pre--1.0%20research-orange)](STATUS.md)
 
 > *Trust, measured.*
 
 ---
 
-## Install
+> **Maturity disclaimer:** Verity is pre-1.0 open-source research infrastructure. It is not a finished enterprise product. See [STATUS.md](STATUS.md) for what is implemented, experimental, and planned.
+
+---
+
+## Research Use Cases
+
+- **RAG grounding evaluation** — RAGAS faithfulness, answer relevance, and context precision at scale
+- **Memory consolidation evaluation** — Pre/post consolidation NDCG@10 delta (DreamRAG-compatible)
+- **Poisoning robustness testing** — Configurable `poison_ratio` adversarial injection evaluation
+- **Query perturbation robustness** — Semantic and syntactic perturbation stress tests
+- **Multi-agent oversight experiments** — Proposer → Critic → Judge debate pipeline with reward hacking detection
+- **Ablation analysis** — Per-stage metric ablation across consolidation phases
+- **Compute budget sweeps** — Threshold and concurrency sweep across architecture variants
+
+---
+
+## Quickstart (60 seconds, no API key required)
 
 ```bash
+git clone https://github.com/Aurelian-Security/Verity.git
+cd Verity
+pip install -e ".[dev]"
+
+# Run mock debate loop — zero API cost, deterministic output
+python examples/mock_debate/run_mock.py
+```
+
+Expected output:
+```
+Experiment: mock_debate_reference
+Items: 5 | Completed: 5 | Failed: 0
+NDCG@10: 0.8234
+Consolidation delta: 0.1142
+Judge verdicts: Pass=4, Conditional=1, Fail=0
+Cost: $0.00 (dry_run=True)
+```
+
+### With API keys (live run)
+
+```bash
+cp .env.example .env
+# Add ANTHROPIC_API_KEY to .env
+
+verity run --config configs/consolidation_eval_example.yaml
+```
+
+### Install options
+
+```bash
+# Base install
 pip install -e .
 
-# With LlamaGuard safety classifier (requires GPU/16GB+ RAM):
+# With LlamaGuard safety classifier (requires GPU / 16GB+ VRAM)
 pip install -e ".[safety]"
 
-# Dev tools:
+# With specific LLM backend
+pip install -e ".[openai-backend]"    # OpenAI
+pip install -e ".[ollama-backend]"    # Local Ollama
+
+# Dev tools (pytest, ruff, mypy)
 pip install -e ".[dev]"
 ```
 
 ---
 
-## CLI Usage
+## Declarative Config
 
-### Run from YAML config (recommended)
-```bash
-verity run --config configs/consolidation_eval_example.yaml
+All evaluation parameters are configured via YAML. No Python required for standard runs.
+
+```yaml
+# configs/consolidation_eval_example.yaml
+
+experiment_id: consolidation_eval_run1
+dataset: datasets/dreamrag_eval_set.json
+
+metrics:
+  - ndcg
+  - ragas_consolidation_delta
+  - ragas_grounding
+  - single_session_poisoning
+
+model: claude-sonnet-4-6
+architecture: consolidation
+
+# Budget ceiling — aborts cleanly if exceeded
+budget: 5.00
+concurrency: 10
+seed: 42
+
+# Adversarial injection ratio for poisoning tests
+poison_ratio: 0.15
+
+agent_params:
+  proposer_model: claude-haiku-4-5
+  critic_model: claude-sonnet-4-6
+  judge_model: claude-haiku-4-5
+  temperature: 0.0
+  dry_run: false
+
+output_dir: outputs/
 ```
 
-### Run from flags
 ```bash
-verity run \
-  --dataset datasets/eval_set.json \
-  --metrics ndcg,ragas_consolidation_delta,llamaguard_safety \
-  --model claude-sonnet-4-6 \
-  --architecture consolidation \
-  --budget 5.00 \
-  --concurrency 10
-```
-
-### Validate a config without running
-```bash
+# Validate without running
 verity validate-config configs/consolidation_eval_example.yaml
-```
 
-### List available metrics
-```bash
+# Run
+verity run --config configs/consolidation_eval_example.yaml
+
+# List all registered metrics
 verity list-metrics
 ```
+
+---
+
+## Capability Matrix
+
+### Phase 1 — Core Evaluation Infrastructure
+
+| Capability | Status |
+|---|---|
+| CLI entrypoint (`verity run`, `validate-config`, `list-metrics`) | ✅ |
+| Pydantic v2 EvalConfig (YAML + flag override) | ✅ |
+| Async EvalRunner (semaphore + exponential-backoff retry) | ✅ |
+| JSONL streaming output (per-item, not batched) | ✅ |
+| Cost tracking + budget ceiling (`BudgetExceededError`) | ✅ |
+| Run manifest (config snapshot + dataset SHA-256 + timestamp) | ✅ |
+| Mock / dry-run mode (zero API cost) | ✅ |
+| Metric plugin registry (`registry.register()`) | ✅ |
+| 17 implemented metrics (retrieval, grounding, safety, adversarial, alignment) | ✅ |
+| `ndcg`, `recall_at_k`, `mean_reciprocal_rank` | ✅ |
+| `ragas_grounding`, `ragas_consolidation_delta` | ✅ |
+| `single_session_poisoning`, `query_perturbation` | ✅ |
+| `llamaguard_safety` (optional, GPU-only) | ✅ |
+| `calibration`, `hallucination_rate`, `trust_score` | ✅ |
+
+### Phase 2 — Multi-Agent Oversight & Statistical Analysis
+
+| Capability | Status |
+|---|---|
+| Proposer → Critic → Judge debate pipeline | ✅ |
+| Reward hacking detection (`reward_hacking_confirmed`) | ✅ |
+| Prompt injection sanitizer (pattern-based) | ✅ |
+| Wilcoxon rank-sum (pre/post consolidation delta) | ✅ |
+| Cohen's d (with small-N and zero-variance guards) | ✅ |
+| Pearson correlation + ECE | ✅ |
+| StatReport (JSON + Rich summary table) | ✅ |
+| Celery + Redis distributed mode | ✅ |
+| Sync fallback (no Redis required) | ✅ |
+| Flower monitor UI | ✅ |
+
+### Phase 3 — Advanced Alignment Metrics (Partial / Planned)
+
+| Capability | Status |
+|---|---|
+| `consistency`, `constitutional_eval`, `model_written_eval` | 🔲 Scaffolded |
+| `source_reliability` | 🔲 Scaffolded |
+| `goal_misgeneralization`, `deceptive_alignment` | 🔲 Scaffolded |
+| Bootstrap confidence intervals | 🔲 Planned v0.3 |
+| Multiple comparison correction | 🔲 Planned v0.3 |
+| Context redaction (`--redact-contexts`) | 🔲 Planned v0.3 |
 
 ---
 
@@ -93,62 +217,6 @@ registry.register("my_metric", MyCustomMetric)
 
 ---
 
-## Architecture
-
-```
-eval_engine/
-  cli.py               ← Verity CLI (verity run / list-metrics / validate-config)
-  config.py            ← Pydantic v2 EvalConfig schema + YAML loader
-  runner.py            ← Async EvalRunner (semaphore, retry, JSONL streaming)
-  cost_tracker.py      ← Per-call token + cost accounting, budget enforcement
-  sanitizer.py         ← Prompt injection sanitization for judge calls
-  statistics.py        ← StatEngine (Wilcoxon, Cohen's d, Pearson, ECE, etc.)
-  schemas.py           ← Typed evaluation data structures
-
-  metrics/             ← 23 registered metrics (17 implemented, 6 scaffolds)
-  agents/              ← Multi-agent oversight pipeline (Proposer → Critic → Judge)
-  orchestration/       ← Celery + Redis distributed queue + sync fallback
-```
-
----
-
-## Metric Registry
-
-### Implemented
-
-| Metric | Category |
-|--------|----------|
-| `ndcg` | Retrieval effectiveness |
-| `recall_at_k` | Retrieval effectiveness |
-| `mean_reciprocal_rank` | Retrieval effectiveness |
-| `ragas_grounding` | Retrieval grounding |
-| `ragas_consolidation_delta` | Consolidation evaluation |
-| `compression_delta` | Graph refinement |
-| `deduplication_delta` | Graph refinement |
-| `entity_coverage` | Graph refinement |
-| `llamaguard_safety` | Safety |
-| `per_stage_ablation` | Ablation analysis |
-| `threshold_compute_budget` | Compute efficiency |
-| `single_session_poisoning` | Adversarial robustness |
-| `query_perturbation` | Adversarial robustness |
-| `calibration` | Trust / alignment |
-| `hallucination_rate` | Trust / alignment |
-| `trust_score` | Trust / alignment |
-| `multi_session_persistence` | Longitudinal evaluation |
-
-### Scaffolded (interfaces locked, implementation deferred)
-
-| Metric | Tier |
-|--------|------|
-| `consistency` | Tier 2 |
-| `constitutional_eval` | Tier 2 |
-| `model_written_eval` | Tier 2 |
-| `source_reliability` | Tier 2 |
-| `goal_misgeneralization` | Tier 3 |
-| `deceptive_alignment` | Tier 3 |
-
----
-
 ## Multi-Agent Oversight Pipeline
 
 ```python
@@ -161,12 +229,13 @@ result = round.run(
     query="What does the consolidation phase improve?",
     contexts=["Context A...", "Context B..."],
 )
-print(result.verdict)              # Pass | Conditional | Fail
+print(result.verdict)               # Pass | Conditional | Fail
 print(result.final_safety_score)
 print(result.reward_hacking_confirmed)
 ```
 
-### Distributed (Redis + Celery)
+### Distributed mode (Redis + Celery)
+
 ```bash
 cp .env.example .env   # Add ANTHROPIC_API_KEY
 docker compose up -d
@@ -189,27 +258,57 @@ report.save("outputs/stats_report.json")
 
 ---
 
-## Environment Variables
+## Provider Support
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...         # Optional
-```
+| Provider | Extra | Env Var |
+|---|---|---|
+| Anthropic (default) | base install | `ANTHROPIC_API_KEY` |
+| OpenAI | `pip install -e ".[openai-backend]"` | `OPENAI_API_KEY` |
+| Ollama (local, air-gapped) | `pip install -e ".[ollama-backend]"` | None |
+
+Proposer, Critic, and Judge models can be set independently in `agent_params` for cost-optimized heterogeneous configurations.
 
 ---
 
 ## Outputs
 
 Each run produces:
+
 ```
 outputs/{experiment_id}/
-  results.jsonl
-  manifest.json
-  cost_ledger_{id}.jsonl
+  results.jsonl           ← Per-item scores, agent verdicts, token counts
+  manifest.json           ← Config snapshot, dataset hash, run metadata
+  cost_ledger_{id}.jsonl  ← Per-call token + cost accounting
 ```
+
+---
+
+## Known Limitations
+
+- Not validated at large scale (>50 concurrent workers)
+- DreamRAG empirical results pending publication
+- No GUI; CLI + SDK only
+- `llamaguard_safety` requires 16GB+ VRAM (excluded from base install and CI)
+- Prompt injection sanitizer is pattern-based, not adversarially robust
+- No formal security audit
+
+See [STATUS.md](STATUS.md) for the complete maturity matrix.
+
+---
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System design, data flow, component rationale |
+| [SECURITY.md](SECURITY.md) | Threat model, OWASP LLM08, controls, disclosure policy |
+| [STATUS.md](STATUS.md) | Implementation maturity matrix |
+| [REPRODUCIBILITY.md](REPRODUCIBILITY.md) | Seeds, lockfiles, manifests, how to reproduce a run |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to add metrics, agents, providers |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
 
 ---
 
 ## License
 
-MIT © Aurelian Security
+MIT © [Aurelian Security](https://github.com/Aurelian-Security)
