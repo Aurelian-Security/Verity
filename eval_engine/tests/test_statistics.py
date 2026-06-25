@@ -25,14 +25,11 @@ Covers:
 from __future__ import annotations
 
 import json
-import math
-import tempfile
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-from eval_engine.statistics import StatEngine, StatReport, StatResult
+from eval_engine.statistics import StatEngine, StatReport
 
 
 # ---------------------------------------------------------------------------

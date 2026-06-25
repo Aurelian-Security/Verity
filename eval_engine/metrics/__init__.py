@@ -19,7 +19,8 @@ SCAFFOLD — Tier 3 (interface locked, frontier research):
     goal_misgeneralization, deceptive_alignment
 """
 from __future__ import annotations
-import importlib, logging
+import importlib
+import logging
 from typing import TYPE_CHECKING
 
 from eval_engine.metrics.base import BaseMetric, MetricResult
@@ -109,7 +110,6 @@ class MetricsRegistry:
         """Return names of scaffold metrics not yet implemented."""
         scaffold_names = []
         for name, cls in self._registry.items():
-            instance = cls.__new__(cls)
             # Scaffolds return metadata with status='scaffold'
             if hasattr(cls, '__doc__') and cls.__doc__ and 'SCAFFOLD' in cls.__doc__:
                 scaffold_names.append(name)

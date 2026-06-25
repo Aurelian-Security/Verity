@@ -45,16 +45,15 @@ import pytest
 import numpy as np
 
 from eval_engine.metrics.calibration import (
-    CalibrationMetric, compute_ece, compute_brier_score, CalibrationReport, CalibrationBin
+    CalibrationMetric, compute_ece, compute_brier_score
 )
 from eval_engine.metrics.hallucination import (
-    HallucinationMetric, _decompose_claims_simple, _verify_claim_nli
+    HallucinationMetric, _decompose_claims_simple
 )
 from eval_engine.metrics.trust_score import TrustScoreMetric
 from eval_engine.metrics.multi_session_persistence import (
     MultiSessionPersistenceMetric, CycleResult, PersistenceReport
 )
-from eval_engine.schemas import GraphSnapshot
 
 
 # =============================================================================

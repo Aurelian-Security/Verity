@@ -42,7 +42,7 @@ from __future__ import annotations
 import json
 import pytest
 
-from eval_engine.agents.agent_base import AgentBase, AgentOutput, AgentTrace
+from eval_engine.agents.agent_base import AgentOutput
 from eval_engine.agents.proposer import ProposerAgent
 from eval_engine.agents.critic import CriticAgent
 from eval_engine.agents.judge import JudgeAgent

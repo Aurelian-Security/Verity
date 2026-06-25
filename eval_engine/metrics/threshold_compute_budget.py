@@ -44,7 +44,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-import numpy as np
 
 from eval_engine.metrics.base import BaseMetric, MetricResult
 from eval_engine.metrics.retrieval_metrics import ndcg_at_k

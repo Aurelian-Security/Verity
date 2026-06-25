@@ -18,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -34,9 +33,6 @@ from eval_engine.config import (
     EvalConfig,
     MetricConfig,
     RAGArchitecture,
-    RetryConfig,
-    StatisticsConfig,
-    SupportedModel,
     TestName,
 )
 from eval_engine.metrics import registry
