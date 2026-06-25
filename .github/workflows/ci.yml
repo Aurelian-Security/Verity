@@ -21,7 +21,7 @@ jobs:
       - name: Run ruff
         run: ruff check eval_engine/ --ignore E501,F401
 
- typecheck:
+  typecheck:
     name: Type Check (mypy)
     runs-on: ubuntu-latest
     steps:
