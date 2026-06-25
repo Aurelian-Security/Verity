@@ -1,12 +1,12 @@
 # STATUS.md — Verity Implementation Maturity
 
-**Aurelian Security | Verity v0.2.0 | Updated: June 2026**
+**Aurelian Security | Verity v0.2.1 | Updated: June 2026**
 
 > This document separates what is implemented and tested from what is experimental or planned. Read this before citing Verity capabilities in a paper or presenting it to a research audience.
 
 ---
 
-## Current Version: v0.2.0
+## Current Version: v0.2.1
 
 Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking changes between minor versions are expected and will be documented in `CHANGELOG.md`.
 
@@ -19,10 +19,15 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 | Component | Status | Notes |
 |---|---|---|
 | CLI (`verity run`, `validate-config`, `list-metrics`) | ✅ Implemented | Stable interface |
+| `verity oversight-run` CLI command | ✅ Implemented | Full flag set: `--dry-run`, `--budget`, `--celery`, model flags |
 | Pydantic v2 EvalConfig (YAML + flags) | ✅ Implemented | Full validation at parse time |
 | Async EvalRunner (semaphore + retry) | ✅ Implemented | Exponential backoff on RateLimitError |
+| OversightRunner (dataset-level debate execution) | ✅ Implemented | Wraps DebateRound; wired to CostTracker + StatEngine |
 | JSONL streaming output | ✅ Implemented | Per-item, not batched at end |
-| Cost tracking + budget ceiling | ✅ Implemented | BudgetExceededError on breach |
+| Oversight output suite | ✅ Implemented | `oversight_results.jsonl`, `oversight_manifest.json`, `oversight_stats.json`, per-debate trace JSON |
+| Cost tracking + budget ceiling | ✅ Implemented | BudgetExceededError on breach; wired into debate pipeline |
+| Cost tracking wired into debate pipeline | ✅ Implemented | Per-agent token accounting feeds main CostTracker |
+| StatEngine integration for debate results | ✅ Implemented | Safety/accuracy score analysis across debate batches |
 | Prompt injection sanitizer | ✅ Implemented | Pattern-based; see SECURITY.md |
 | Run manifest (config snapshot + timestamp) | ✅ Implemented | Written to `manifest.json` per run |
 | Mock / dry-run mode | ✅ Implemented | `DebateRound(dry_run=True)`; zero API cost |
@@ -74,10 +79,14 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry,
 | Component | Status | Notes |
 |---|---|---|
 | Proposer agent | ✅ Implemented | Text generation only; no tool calls |
-| Critic agent | ✅ Implemented | Grounding challenge + safety flag |
+| Critic agent | ✅ Implemented | Grounding challenge + safety flag; sycophancy pre-screen |
 | Judge agent | ✅ Implemented | Pass / Conditional / Fail verdict |
 | Dry-run fixtures | ✅ Implemented | Deterministic; usable in CI without API keys |
 | Reward hacking detection flag | ✅ Implemented | `reward_hacking_confirmed` in verdict |
+| OversightRunner (dataset-level execution) | ✅ Implemented | Async with semaphore; feeds CostTracker + StatEngine |
+| Per-debate trace JSON output | ✅ Implemented | Full A→B→C trace per item |
+| Cost tracking wired into pipeline | ✅ Implemented | Per-agent token counts feed main CostTracker |
+| StatEngine integration for debate batches | ✅ Implemented | Safety/accuracy score analysis across runs |
 | Debate loop stress testing | ⚠️ Not formally tested | Long recursive loops not benchmarked |
 
 ---
@@ -91,6 +100,7 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry,
 | Pearson correlation | ✅ Implemented | |
 | ECE (calibration error) | ✅ Implemented | |
 | StatReport (JSON + rich summary) | ✅ Implemented | |
+| Debate batch statistical analysis | ✅ Implemented | Safety/accuracy score analysis via OversightRunner |
 | Bootstrap confidence intervals | 🔲 Planned v0.3 | |
 | Multiple comparison correction (Bonferroni / BH) | 🔲 Planned v0.3 | |
 
@@ -101,8 +111,10 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry,
 | Component | Status | Notes |
 |---|---|---|
 | Celery + Redis distributed mode | ✅ Implemented | Functional; not load-tested |
-| Sync fallback (no Redis required) | ✅ Implemented | Default for `--mock` and local use |
+| `verity oversight-run --celery` | ✅ Implemented | Dispatches debate rounds via Celery queue |
+| Sync fallback (no Redis required) | ✅ Implemented | Default for `--dry-run` and local use |
 | Flower monitor UI | ✅ Implemented | `docker compose --profile monitoring up` |
+| EvalRunner ↔ OversightRunner integration | ✅ Implemented | Single config can run metrics + debate pipeline |
 | Worker auto-scaling | ⚠️ Manual | `docker compose up --scale worker=N` |
 | Distributed mode at scale (>50 concurrent workers) | 🔲 Not validated | See Known Limitations |
 
@@ -112,9 +124,9 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry,
 
 | Item | Status | Notes |
 |---|---|---|
-| `pytest` test suite | ✅ In progress | Unit + integration; coverage growing |
-| `ruff` linting | ✅ Configured | `pyproject.toml` |
-| `mypy` type checking | ✅ Configured | Strict mode |
+| `pytest` test suite (191 tests) | ✅ Passing | Unit + integration; 191/191 green |
+| `ruff` linting | ✅ Passing | CI-enforced |
+| `mypy` type checking | ⚠️ Non-blocking | Runs in CI; known union-attr issues with Anthropic SDK types |
 | GitHub Actions CI workflow | ✅ Implemented | `.github/workflows/ci.yml` |
 | Build check (`pip install -e .`) | ✅ Implemented | Part of CI |
 | Coverage reporting | 🔲 Planned v0.3 | |
@@ -131,6 +143,7 @@ These are current facts about Verity, not aspirational caveats:
 - **No GUI.** Verity is CLI + SDK only. There is no web dashboard.
 - **`multi_session_persistence` has limited test coverage.** Longitudinal evaluation across multiple sessions requires a persistent dataset fixture that is not yet fully implemented in the test suite.
 - **Prompt injection sanitizer is partial.** The current sanitizer covers known pattern-based attacks. Semantically coherent adversarial injections designed to evade pattern matching are not addressed.
+- **mypy union-attr errors from Anthropic SDK.** The Anthropic SDK's content block union type (`TextBlock | ThinkingBlock | ...`) causes mypy to flag `.text` access as unsafe. These are suppressed with `# type: ignore[union-attr]` at call sites; the runtime behavior is correct.
 - **No formal security audit.** Verity has not undergone a professional penetration test or formal code security review.
 
 ---

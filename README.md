@@ -55,7 +55,17 @@ Cost: $0.00 (dry_run=True)
 cp .env.example .env
 # Add ANTHROPIC_API_KEY to .env
 
+# Metric evaluation
 verity run --config configs/consolidation_eval_example.yaml
+
+# Multi-agent oversight (dry-run, zero cost)
+verity oversight-run --dataset datasets/eval_set.json --dry-run
+
+# Multi-agent oversight (live)
+verity oversight-run --dataset datasets/eval_set.json --budget 20.00
+
+# Distributed oversight via Celery
+verity oversight-run --dataset datasets/eval_set.json --celery
 ```
 
 ### Install options
@@ -118,8 +128,11 @@ output_dir: outputs/
 # Validate without running
 verity validate-config configs/consolidation_eval_example.yaml
 
-# Run
+# Run metric evaluation
 verity run --config configs/consolidation_eval_example.yaml
+
+# Run multi-agent oversight pipeline
+verity oversight-run --config configs/consolidation_eval_example.yaml
 
 # List all registered metrics
 verity list-metrics
@@ -153,6 +166,7 @@ verity list-metrics
 | Capability | Status |
 |---|---|
 | Proposer → Critic → Judge debate pipeline | ✅ |
+| Sycophancy pre-screen in Critic agent | ✅ |
 | Reward hacking detection (`reward_hacking_confirmed`) | ✅ |
 | Prompt injection sanitizer (pattern-based) | ✅ |
 | Wilcoxon rank-sum (pre/post consolidation delta) | ✅ |
@@ -163,7 +177,19 @@ verity list-metrics
 | Sync fallback (no Redis required) | ✅ |
 | Flower monitor UI | ✅ |
 
-### Phase 3 — Advanced Alignment Metrics (Partial / Planned)
+### Phase 3 — Wiring Layer (Complete as of v0.2.1)
+
+| Capability | Status |
+|---|---|
+| `verity oversight-run` CLI command | ✅ |
+| `OversightRunner` (dataset-level debate execution) | ✅ |
+| Cost tracking wired into debate pipeline | ✅ |
+| StatEngine integration for debate batch scores | ✅ |
+| Per-debate trace JSON output | ✅ |
+| `oversight_results.jsonl` + `oversight_manifest.json` + `oversight_stats.json` | ✅ |
+| `verity oversight-run --celery` distributed dispatch | ✅ |
+
+### Phase 4 — Advanced Alignment Metrics (Scaffolded / Planned)
 
 | Capability | Status |
 |---|---|
@@ -182,22 +208,19 @@ verity list-metrics
 import asyncio
 from eval_engine.config import EvalConfig
 from eval_engine.runner import EvalRunner
+from eval_engine.orchestration.oversight_runner import OversightRunner
 
+# Metric evaluation
 config = EvalConfig.from_yaml("configs/consolidation_eval_example.yaml")
 runner = EvalRunner(config)
-
-dataset = [
-    {
-        "question": "What does the consolidation phase improve in retrieval quality?",
-        "contexts": ["The consolidation phase restructures the knowledge graph..."],
-        "answer": "Consolidation prunes low-weight edges and improves retrieval precision.",
-        "ground_truth": "The consolidation phase performs graph downscaling...",
-    }
-]
-
 result = asyncio.run(runner.run(dataset))
 print(f"NDCG@10: {result.mean_score('ndcg'):.4f}")
-print(f"Consolidation delta: {result.mean_score('ragas_consolidation_delta'):.4f}")
+
+# Multi-agent oversight
+oversight = OversightRunner(config)
+oversight_result = asyncio.run(oversight.run(dataset))
+print(f"Pass rate: {oversight_result.pass_rate:.2%}")
+print(f"Reward hacking detected: {oversight_result.reward_hacking_count}")
 ```
 
 ### Custom metric plugin
@@ -239,7 +262,7 @@ print(result.reward_hacking_confirmed)
 ```bash
 cp .env.example .env   # Add ANTHROPIC_API_KEY
 docker compose up -d
-celery -A eval_engine.orchestration.celery_tasks worker --concurrency=4
+verity oversight-run --dataset datasets/eval_set.json --celery
 ```
 
 ---
@@ -272,13 +295,22 @@ Proposer, Critic, and Judge models can be set independently in `agent_params` fo
 
 ## Outputs
 
-Each run produces:
-
+### Metric evaluation run (`verity run`)
 ```
 outputs/{experiment_id}/
-  results.jsonl           ← Per-item scores, agent verdicts, token counts
+  results.jsonl           ← Per-item scores, token counts
   manifest.json           ← Config snapshot, dataset hash, run metadata
   cost_ledger_{id}.jsonl  ← Per-call token + cost accounting
+```
+
+### Oversight run (`verity oversight-run`)
+```
+outputs/{experiment_id}/
+  oversight_results.jsonl     ← Per-item verdicts, safety scores
+  oversight_manifest.json     ← Config snapshot, dataset hash, run metadata
+  oversight_stats.json        ← StatEngine output for debate batch
+  traces/{query_id}.json      ← Full A→B→C trace per item
+  cost_ledger_{id}.jsonl      ← Per-call token + cost accounting
 ```
 
 ---

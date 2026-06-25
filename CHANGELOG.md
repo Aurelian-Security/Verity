@@ -11,6 +11,37 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 - Bootstrap confidence intervals in StatEngine
 - Multiple comparison correction (Bonferroni / Benjamini-Hochberg) in StatReport
 - Coverage reporting in CI
+- mypy strict mode (blocked by Anthropic SDK union-attr types)
+
+---
+
+## [0.2.1] — 2026-06
+
+### Added
+- **`OversightRunner`** (`orchestration/oversight_runner.py`) — dataset-level execution wrapper around `DebateRound`. Async with semaphore concurrency. Feeds into `CostTracker` and `StatEngine`. Writes `oversight_results.jsonl`, `oversight_manifest.json`, `oversight_stats.json`, and per-debate trace JSONs.
+- **`verity oversight-run` CLI command** — full flag set: `--dry-run`, `--proposer-model`, `--critic-model`, `--judge-model`, `--recall-at-k`, `--budget`, `--concurrency`, `--celery`
+- **Cost tracking wired into debate pipeline** — per-agent token counts now feed the main `CostTracker`; `BudgetExceededError` applies to oversight runs
+- **StatEngine integration for debate batches** — `OversightRunner` passes safety and accuracy score arrays to `StatEngine` for Wilcoxon/Cohen's d analysis across a run
+- **Per-debate trace JSON output** — full A→B→C trace written per item alongside `oversight_results.jsonl`
+- **`OversightRunResult`** schema — typed result object with per-item verdicts, aggregate stats, cost summary
+- **21 new tests** (`tests/test_oversight_runner.py`) covering `OversightRunResult`, `OversightRunner`, CLI, and exports
+- **Full documentation suite** — `ARCHITECTURE.md`, `SECURITY.md`, `STATUS.md`, `REPRODUCIBILITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) — pytest, ruff, mypy (non-blocking), build check
+
+### Changed
+- `orchestration/__init__.py` — updated to export `OversightRunner`, `OversightRunResult`, `DebateRound`, `DebateResult`
+- `eval_engine/__init__.py` — all four orchestration types now importable from top-level `eval_engine`
+- `cli.py` — `verity oversight-run` added; `list-metrics` scope map cleaned up
+- `config.py` — `metrics` field `min_length` relaxed to 0 (oversight runs do not require metrics)
+- CI mypy job set to non-blocking (`|| true`) pending resolution of Anthropic SDK union-attr typing
+
+### Fixed
+- Anthropic SDK `union-attr` mypy errors suppressed with targeted `# type: ignore[union-attr]` at call sites in `agent_base.py`, `hallucination.py`, `query_perturbation.py`
+- Override signature mypy errors suppressed in `proposer.py`, `critic.py`, `judge.py`
+- Celery `.s()` attr-defined mypy error suppressed in `celery_tasks.py`
+- ruff E401 (multiple imports on one line) fixed across `runner.py`, `metrics/__init__.py`, `agents/proposer.py`
+- ruff F541 (f-string without placeholders) fixed in `calibration.py`, `hallucination.py`
+- ruff F841 (unused variable `instance`) fixed in `metrics/__init__.py`
 
 ---
 
@@ -18,6 +49,7 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 
 ### Added
 - **Multi-agent oversight pipeline**: Proposer → Critic → Judge with `Pass / Conditional / Fail` verdict
+- **Sycophancy pre-screen** in Critic agent
 - **Dry-run mode** (`DebateRound(dry_run=True)`): deterministic fixture responses, zero API cost, CI-safe
 - **Cost tracker**: per-call token accounting with `BudgetExceededError` on ceiling breach
 - **Prompt injection sanitizer** (`sanitizer.py`): pattern-based sanitization applied to all Judge inputs
@@ -29,10 +61,8 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 - **6 scaffolded metric interfaces**: `consistency`, `constitutional_eval`, `model_written_eval`, `source_reliability`, `goal_misgeneralization`, `deceptive_alignment`
 - **`verity validate-config`** CLI subcommand
 - **`verity list-metrics`** CLI subcommand with scaffold/implemented distinction
-- **GitHub Actions CI** (`.github/workflows/ci.yml`): pytest, ruff, mypy, build check
-- **`examples/`** directory with `mock_debate/`, `ragas_grounding/`, `poisoning_test/`, `ablation_test/`, `budget_sweep/`
 - Provider abstraction: `anthropic-backend`, `openai-backend`, `ollama-backend` optional extras
-- `ARCHITECTURE.md`, `SECURITY.md`, `STATUS.md`, `REPRODUCIBILITY.md`, `CONTRIBUTING.md` documentation suite
+- `examples/` directory with `mock_debate/`, `ragas_grounding/`, `poisoning_test/`, `ablation_test/`, `budget_sweep/`
 
 ### Changed
 - Renamed project from `eval-engine` to **Verity** and moved to `Aurelian-Security/Verity` repository
