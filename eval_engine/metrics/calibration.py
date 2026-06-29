@@ -62,7 +62,8 @@ PAPER NOTE:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -133,7 +134,7 @@ class CalibrationReport:
 
     def print_summary(self) -> None:
         print(f"\n{'='*55}")
-        print("  CALIBRATION REPORT")
+        print(f"  CALIBRATION REPORT")
         print(f"{'='*55}")
         print(f"  ECE:               {self.ece:.4f}  (0=perfect, 1=worst)")
         print(f"  Brier Score:       {self.brier_score:.4f}  (0=perfect, 1=worst)")
@@ -142,7 +143,7 @@ class CalibrationReport:
         print(f"  Direction:         {self.calibration_direction}")
         print(f"  N samples:         {self.n_samples}")
         print(f"  Reliable:          {self.reliable}")
-        print("\n  Reliability Diagram:")
+        print(f"\n  Reliability Diagram:")
         print(f"  {'Bin':<18} {'Conf':>6} {'Acc':>6} {'Gap':>7} {'N':>5}")
         print(f"  {'-'*45}")
         for b in self.bins:
@@ -155,7 +156,7 @@ class CalibrationReport:
                 f"  {b.n_samples:>5}"
             )
         if any(not b.reliable for b in self.bins):
-            print("  * fewer than 5 samples — bin unreliable")
+            print(f"  * fewer than 5 samples — bin unreliable")
         print(f"{'='*55}\n")
 
 

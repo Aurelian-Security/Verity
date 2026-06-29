@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Verity Evaluation Engine
 
-**Aurelian Security | Verity v0.2.1**
+**Aurelian Security | Verity v0.3.0**
 
 > This document is the authoritative reference for Verity's system design, component responsibilities, data flow, and the engineering rationale behind its architectural decisions.
 
@@ -31,14 +31,14 @@ The three architectural invariants that everything else flows from:
 │  • Parses flags and YAML config                                         │
 │  • Validates EvalConfig via Pydantic v2                                 │
 │  • Routes to EvalRunner (metrics) or OversightRunner (debate pipeline)  │
-│  • Both runners support --celery flag for distributed dispatch          │
+│  • Handles verity compare, verity manifest, verity validate-config      │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │  EvalConfig (typed, validated)
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  CONFIG LAYER  (eval_engine/config.py — Pydantic v2)                   │
 │  • EvalConfig: dataset path, metrics list, model, architecture,         │
-│    budget ceiling, concurrency, poison_ratio thresholds, agent params   │
+│    budget ceiling, concurrency, seed, track flag, agent params          │
 │  • metrics field min_length=0: oversight runs don't require metrics     │
 │  • Validates all fields at parse time — invalid configs crash early     │
 └────────────────────────────────┬────────────────────────────────────────┘
@@ -52,6 +52,8 @@ The three architectural invariants that everything else flows from:
       │  Metric evaluation  │    │   oversight_runner.py)     │
       │  asyncio semaphore  │    │  Dataset-level debate exec │
       │  retry / JSONL      │    │  asyncio semaphore         │
+      │  seed control       │    │  CostTracker + StatEngine  │
+      │  reproducibility    │    │  wired in                  │
       └──────────┬──────────┘    └──────────────┬────────────┘
                  │                              │
                  └──────────┬───────────────────┘
@@ -65,25 +67,24 @@ The three architectural invariants that everything else flows from:
          │  In-process  │  │  (--celery flag)    │
          └──────┬───────┘  └────────┬────────────┘
                 └──────────┬────────┘
-                           │  Evaluation items (typed EvalRecord)
+                           │  Evaluation items
                            ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  MULTI-AGENT OVERSIGHT PIPELINE  (eval_engine/agents/)                  │
 │                                                                         │
 │   ┌──────────┐    ┌──────────┐    ┌──────────┐                         │
 │   │ PROPOSER │───▶│  CRITIC  │───▶│  JUDGE   │                         │
-│   │ Agent    │    │ Agent    │    │ Agent    │                          │
+│   │ Agent A  │    │ Agent B  │    │ Agent C  │                         │
 │   │(generate │    │(challenge│    │(verdict: │                          │
 │   │ answer)  │    │ grounding│    │ Pass /   │                          │
-│   │          │    │ + safety │    │ Cond /   │                          │
-│   │          │    │ + syco-  │    │ Fail)    │                          │
-│   │          │    │ phancy   │    │          │                          │
+│   │          │    │ + RH     │    │ Cond /   │                          │
+│   │          │    │ detect.) │    │ Fail)    │                          │
 │   └──────────┘    └──────────┘    └──────────┘                         │
 │                                                                         │
-│  All agent calls sanitized by sanitizer.py before LLM submission        │
+│  All content sanitized by sanitizer.py before LLM submission            │
 │  CostTracker wraps every API call — aborts at budget ceiling            │
-│  Per-debate trace JSON written alongside results                        │
-│  All agent outputs written to JSONL before scoring begins               │
+│  Per-debate trace JSON written to debates/ alongside results            │
+│  All agent outputs materialized to JSONL before scoring begins          │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │  Materialized agent outputs (JSONL)
                                  ▼
@@ -98,12 +99,24 @@ The three architectural invariants that everything else flows from:
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  STATISTICAL ENGINE  (eval_engine/statistics.py — StatEngine)           │
-│  • Wilcoxon rank-sum (non-parametric, pre/post consolidation delta)     │
-│  • Cohen's d (effect size; guarded against small-N and uniform dist.)  │
-│  • Pearson correlation (score vs. context length)                       │
-│  • ECE (calibration error)                                              │
+│  • Wilcoxon, Mann-Whitney, paired t-test (significance)                 │
+│  • Cohen's d, Cliff's delta (effect size)                               │
+│  • Pearson, Spearman (correlation)                                      │
+│  • Shapiro-Wilk normality, descriptive stats                            │
+│  • pre_post_bundle(): 7-test suite for one results table row            │
 │  • Receives debate batch scores from OversightRunner                    │
 │  • StatReport: serializes to JSON, prints rich summary table            │
+└────────────────────────────────┬────────────────────────────────────────┘
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  REPRODUCIBILITY LAYER  (eval_engine/reproducibility.py,                │
+│                          eval_engine/dataset_manifest.py,               │
+│                          eval_engine/comparison.py)                     │
+│  • ReproducibilityBundle: seed, git hash, Python version, all deps      │
+│  • DatasetManifest: SHA-256 content hash, schema, lineage chain         │
+│  • compare_run_manifests(): score deltas, dataset identity diff         │
+│  • Written when --track flag set; verity compare/manifest CLI commands  │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │
                                  ▼
@@ -113,9 +126,11 @@ The three architectural invariants that everything else flows from:
 │  • oversight_results.jsonl    — per-item agent verdicts                 │
 │  • oversight_manifest.json    — run config snapshot, seeds, timestamp   │
 │  • oversight_stats.json       — StatEngine output for debate batch      │
-│  • traces/{query_id}.json     — full A→B→C trace per debate item        │
+│  • debates/{query_id}.json    — full A→B→C trace per debate item        │
 │  • manifest.json              — run config snapshot (metric runs)       │
 │  • cost_ledger_{id}.jsonl     — per-call token + cost accounting        │
+│  • reproducibility.json       — seed, git hash, deps (when --track)     │
+│  • dataset_manifest.json      — SHA-256 + lineage (when --track)        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -126,64 +141,79 @@ The three architectural invariants that everything else flows from:
 ```
 Verity/
 ├── eval_engine/
-│   ├── cli.py                  ← Typer CLI (verity run / oversight-run / validate-config / list-metrics)
+│   ├── cli.py                  ← Typer CLI (6 commands)
 │   ├── config.py               ← Pydantic v2 EvalConfig + YAML loader
-│   ├── runner.py               ← Async EvalRunner: semaphore, retry, JSONL streaming
-│   ├── cost_tracker.py         ← Per-call token accounting; enforces budget ceiling pre-call
-│   ├── sanitizer.py            ← Prompt injection sanitization applied to all Judge inputs
-│   ├── statistics.py           ← StatEngine: Wilcoxon, Cohen's d, Pearson, ECE; StatReport serializer
-│   ├── schemas.py              ← EvalRecord, MetricResult, AgentVerdict, RunManifest typed schemas
-│   ├── registry.py             ← Metric plugin registry (registry.register / registry.get)
+│   ├── runner.py               ← Async EvalRunner: semaphore, retry, JSONL, seed control
+│   ├── cost_tracker.py         ← Per-call token accounting; enforces budget ceiling
+│   ├── sanitizer.py            ← Pattern-based prompt injection sanitization
+│   ├── statistics.py           ← StatEngine: 9 methods + StatReport
+│   ├── schemas.py              ← RetrievalCase, RetrievalResult, GraphSnapshot
+│   ├── reproducibility.py      ← ReproducibilityBundle: seed, git, deps capture
+│   ├── dataset_manifest.py     ← DatasetManifest: SHA-256 hash + lineage tracking
+│   ├── comparison.py           ← compare_run_manifests(): run diff engine
 │   │
 │   ├── metrics/
-│   │   ├── base.py             ← BaseMetric ABC (abstract .score() → MetricResult)
-│   │   ├── retrieval.py        ← ndcg, recall_at_k, mean_reciprocal_rank
-│   │   ├── grounding.py        ← ragas_grounding, ragas_consolidation_delta
-│   │   ├── graph_refinement.py ← compression_delta, deduplication_delta, entity_coverage
-│   │   ├── safety.py           ← llamaguard_safety (optional dep: transformers, torch)
-│   │   ├── adversarial.py      ← single_session_poisoning, query_perturbation
-│   │   ├── alignment.py        ← calibration, hallucination_rate, trust_score
-│   │   ├── ablation.py         ← per_stage_ablation, threshold_compute_budget
-│   │   ├── longitudinal.py     ← multi_session_persistence
-│   │   └── scaffolds/          ← consistency, constitutional_eval, model_written_eval,
-│   │                               source_reliability, goal_misgeneralization, deceptive_alignment
+│   │   ├── __init__.py         ← MetricsRegistry: 23 registered metrics
+│   │   ├── base.py             ← BaseMetric ABC + MetricResult dataclass
+│   │   ├── retrieval_metrics.py     ← Recall@K, MRR, NDCG@K
+│   │   ├── graph_metrics.py         ← Compression delta, dedup delta, entity coverage
+│   │   ├── ragas_adapter.py         ← RAGAS dataset conversion
+│   │   ├── ragas_runner.py          ← RAGAS execution + LLM backend config
+│   │   ├── ragas_grounding.py       ← Single-phase RAGAS grounding
+│   │   ├── ragas_consolidation_delta.py  ← Pre/post consolidation delta
+│   │   ├── llamaguard.py            ← LlamaGuard-3-8B safety classifier
+│   │   ├── calibration.py           ← ECE + Brier Score
+│   │   ├── hallucination.py         ← Claim-level hallucination rate
+│   │   ├── trust_score.py           ← Composite trust score
+│   │   ├── multi_session_persistence.py  ← N-cycle forgetting curve
+│   │   ├── per_stage_ablation.py    ← Stage contribution measurement
+│   │   ├── threshold_compute_budget.py   ← Compute budget curve
+│   │   ├── single_session_poisoning.py   ← Adversarial poisoning test
+│   │   ├── query_perturbation.py    ← Query perturbation robustness
+│   │   ├── consistency.py           ← [Scaffold Tier 2]
+│   │   ├── constitutional_eval.py   ← [Scaffold Tier 2]
+│   │   ├── model_written_eval.py    ← [Scaffold Tier 2]
+│   │   ├── source_reliability.py    ← [Scaffold Tier 2]
+│   │   ├── goal_misgeneralization.py ← [Scaffold Tier 3]
+│   │   └── deceptive_alignment.py   ← [Scaffold Tier 3]
 │   │
 │   ├── agents/
-│   │   ├── agent_base.py       ← AgentBase ABC: real/dry-run dispatch, trace logging, token accounting
-│   │   ├── proposer.py         ← Generates candidate answers from retrieved contexts
-│   │   ├── critic.py           ← Challenges grounding; sycophancy pre-screen; flags safety issues
-│   │   ├── judge.py            ← Issues Pass / Conditional / Fail verdict
-│   │   └── debate_round.py     ← Orchestrates Proposer → Critic → Judge; supports dry_run
+│   │   ├── agent_base.py       ← Shared base: real/dry-run dispatch, trace logging
+│   │   ├── proposer.py         ← Agent A: grounded answer generation
+│   │   ├── critic.py           ← Agent B: reward hacking detection
+│   │   └── judge.py            ← Agent C: verdict synthesis
 │   │
-│   └── orchestration/
-│       ├── oversight_runner.py ← OversightRunner: dataset-level debate execution wired to CostTracker + StatEngine
-│       ├── celery_tasks.py     ← Celery task definitions; dispatches debate rounds to Redis queue
-│       └── sync_fallback.py    ← In-process queue (no Redis required)
+│   ├── orchestration/
+│   │   ├── debate_round.py     ← Single A→B→C pipeline unit + DebateResult
+│   │   ├── oversight_runner.py ← Dataset-level debate execution + stats + manifest
+│   │   └── celery_tasks.py     ← Celery task definitions + sync fallback
+│   │
+│   └── tests/
+│       ├── test_eval_engine.py         ← Core metrics, sanitizer, budget tracker (31)
+│       ├── test_statistics.py          ← StatEngine edge cases (22)
+│       ├── test_phase2_metrics.py      ← Ablation, poisoning, perturbation (19)
+│       ├── test_phase3_pipeline.py     ← Agent pipeline, debate round (32)
+│       ├── test_oversight_runner.py    ← OversightRunner, OversightRunResult, CLI (21)
+│       ├── test_tier1_metrics.py       ← Calibration, hallucination, trust, persistence (37)
+│       ├── test_scaffolds.py           ← Scaffold registry and interface contracts (50)
+│       └── test_phase4.py              ← Reproducibility, dataset manifest, comparison (33)
 │
 ├── configs/
-│   └── consolidation_eval_example.yaml   ← Reference config for DreamRAG consolidation eval
+│   ├── consolidation_eval_example.yaml ← Example consolidation evaluation config
+│   └── centralized_baseline.yaml       ← Centralized RAG baseline config
 │
-├── examples/
-│   ├── mock_debate/            ← Zero-cost dry_run demo (no API key required)
-│   ├── ragas_grounding/        ← RAGAS faithfulness + answer relevance baseline
-│   ├── poisoning_test/         ← single_session_poisoning adversarial evaluation
-│   ├── ablation_test/          ← per_stage_ablation across consolidation phases
-│   └── budget_sweep/           ← Threshold/compute budget sweep across concurrency levels
-│
-├── tests/
-│   ├── test_eval_engine.py         ← Core metrics, sanitizer, budget tracker
-│   ├── test_phase2_metrics.py      ← Ablation, poisoning, perturbation metrics
-│   ├── test_phase3_pipeline.py     ← Agent pipeline, debate round, orchestration sync
-│   ├── test_oversight_runner.py    ← OversightRunner, OversightRunResult, CLI
-│   ├── test_scaffolds.py           ← Scaffold registry and interface contracts
-│   ├── test_statistics.py          ← StatEngine edge cases
-│   └── test_tier1_metrics.py       ← Calibration, hallucination, trust score, persistence
-│
-├── .github/workflows/ci.yml   ← CI: pytest, ruff, mypy, build check
+├── datasets/                   ← User-provided datasets (gitignored)
+├── outputs/                    ← Generated results (gitignored)
 ├── docker-compose.yml          ← Redis + Celery worker + Flower monitor
 ├── Dockerfile.worker           ← Worker container image
 ├── pyproject.toml              ← Build system, deps, dev tools, pytest config
-└── .env.example                ← Environment variable template
+├── .env.example                ← Environment variable template
+├── README.md
+├── ARCHITECTURE.md             ← This document
+├── STATUS.md                   ← Implementation maturity matrix
+├── SECURITY.md                 ← Threat model + responsible disclosure
+├── CHANGELOG.md                ← Version history
+└── LICENSE                     ← MIT
 ```
 
 ---
@@ -194,13 +224,13 @@ Verity/
 
 The CLI (`cli.py`) is a pure dispatch layer. It parses input, instantiates `EvalConfig`, and routes to either `EvalRunner` (metric evaluation via `verity run`) or `OversightRunner` (debate pipeline via `verity oversight-run`). No business logic lives in `cli.py`.
 
-`EvalConfig` (Pydantic v2) validates all parameters at instantiation time. The `metrics` field accepts an empty list — oversight runs do not require metrics. Fields with constraints (e.g., `concurrency: int = Field(ge=1, le=50)`, `budget: float = Field(gt=0.0)`) fail loudly before a single API call is made.
+`EvalConfig` (Pydantic v2) validates all parameters at instantiation time. The `metrics` field accepts an empty list — oversight runs do not require metrics. The `seed` field (default: 42) flows through to `set_global_seed()` at run start. The `track` boolean gates reproducibility bundle and dataset manifest generation.
 
 `EvalRunner` uses `asyncio.Semaphore(config.concurrency)` to bound parallel API calls. Each item is retried up to 3× with exponential backoff on `RateLimitError`. Items are streamed to `results.jsonl` as they complete.
 
 ### 4.2 OversightRunner
 
-`OversightRunner` is the dataset-level wrapper around `DebateRound`, introduced in v0.2.1. It closes the wiring gap between the debate pipeline and the rest of the platform:
+`OversightRunner` is the dataset-level wrapper around `DebateRound`. It closes the wiring gap between the debate pipeline and the rest of the platform:
 
 - Accepts a dataset and `EvalConfig`
 - Dispatches each item through `DebateRound` with async semaphore concurrency
@@ -208,24 +238,13 @@ The CLI (`cli.py`) is a pure dispatch layer. It parses input, instantiates `Eval
 - Collects `DebateResult` objects and passes safety/accuracy score arrays to `StatEngine`
 - Writes `oversight_results.jsonl`, `oversight_manifest.json`, `oversight_stats.json`, and per-debate trace JSONs
 
-```python
-# Dry-run (zero cost)
-verity oversight-run --dataset datasets/eval_set.json --dry-run
-
-# Live run with budget ceiling
-verity oversight-run --dataset datasets/eval_set.json --budget 20.00
-
-# Distributed
-verity oversight-run --dataset datasets/eval_set.json --celery
-```
-
 ### 4.3 Multi-Agent Oversight Pipeline
 
-The Proposer → Critic → Judge pipeline is the system's principal oversight mechanism and its primary defense against reward hacking.
+The Proposer → Critic → Judge pipeline is the principal oversight mechanism and primary defense against reward hacking.
 
 - **Proposer**: Given a query and retrieved contexts, generates a candidate answer. No network access, no tool calls. Output is a structured typed object.
-- **Critic**: Receives the query, contexts, and Proposer output. Runs a sycophancy pre-screen before grounding challenge. Flags potential safety issues. Output includes a `reward_hacking_suspected` boolean.
-- **Judge**: Receives all prior context plus the Critic's critique. Issues a verdict (`Pass`, `Conditional`, `Fail`) and a `final_safety_score`. The verdict gates whether the item's scores are included in the statistical report.
+- **Critic**: Receives the query, contexts, and Proposer output. Runs a zero-cost sycophancy pre-screen before the LLM deep audit. Detects: sycophantic openers, confidence inflation, factual drift, metric gaming.
+- **Judge**: Receives all prior context plus the Critic's critique. Issues a verdict (`Pass`, `Conditional`, `Fail`) and scores. The verdict gates whether the item's scores are included in the statistical report.
 
 This structure enforces the OWASP LLM08 (Excessive Agency) mitigation: the Proposer has no ability to trigger downstream actions. Its output must survive Critic review and Judge approval before it influences any scored result.
 
@@ -233,24 +252,33 @@ This structure enforces the OWASP LLM08 (Excessive Agency) mitigation: the Propo
 
 ### 4.4 Sanitizer
 
-`sanitizer.py` applies prompt injection defenses to any text passed to the Judge agent. The sanitizer strips common injection patterns before Judge submission. This is not a complete defense — see `SECURITY.md` for the full threat model.
+`sanitizer.py` applies prompt injection defenses to any text passed to the Judge agent. The sanitizer strips common injection patterns (role-switching, ignore-instructions, persona override, score manipulation) before Judge submission. This is not a complete defense — see `SECURITY.md` for the full threat model and residual risks.
 
 ### 4.5 Statistical Engine
 
-`StatEngine` computes all statistics after metric scoring is complete, operating only on arrays of floats. In v0.2.1, it also receives debate batch scores from `OversightRunner` for safety/accuracy analysis.
+`StatEngine` computes all statistics after metric scoring is complete, operating only on arrays of floats. In v0.3.0, it also receives debate batch scores from `OversightRunner` for safety/accuracy analysis.
 
 Edge case handling is explicit:
-- **Cohen's d with N < 10**: logs warning and returns `None`
-- **Uniform distribution (std=0)**: logs warning and returns `None`
-- **Wilcoxon with tied ranks**: uses `method='approx'` with tie-correction warning
+- **Cohen's d with N < 10**: logs warning, returns `None`
+- **Uniform distribution (std=0)**: logs warning, returns `None`
+- **Wilcoxon with tied ranks**: uses tie-correction with `RuntimeWarning`
+- **Pearson on constant input**: returns `ConstantInputWarning`, handled gracefully
 
-### 4.6 Cost Tracker
+### 4.6 Reproducibility Layer
 
-`CostTracker` maintains a running token ledger across all API calls. In v0.2.1, it is wired into the debate pipeline — per-agent token counts from `AgentBase` feed the main ledger. Before each call, it checks whether the projected cost would exceed `config.budget`. If yes, the call is aborted with `BudgetExceededError`.
+Three modules added in v0.3.0:
 
-### 4.7 Distributed Mode (Redis + Celery)
+- **`reproducibility.py`**: Captures seed, Python version, platform, git hash/branch/dirty flag, all installed package versions, and config snapshot into `reproducibility.json`. `set_global_seed()` seeds Python random, numpy, and torch.
+- **`dataset_manifest.py`**: Content-addresses datasets via SHA-256. Supports full transformation lineage for poisoning/consolidation pipelines. `version_tag` field supports `v1.0`-style benchmark versioning.
+- **`comparison.py`**: Diffs two run manifests — metric score deltas, verdict distribution changes, dataset SHA-256 identity verification, git hash comparison.
 
-When `docker compose up -d` is running, both `EvalRunner` and `OversightRunner` detect the Redis URL and route through `celery_tasks.py`. The sync fallback provides identical semantics without Redis, using an in-process queue. This is the default path for `--dry-run` and local use.
+### 4.7 Cost Tracker
+
+`CostTracker` maintains a running token ledger across all API calls, wired into both `EvalRunner` and the debate pipeline. Before each call, it checks whether spend would exceed `config.budget`. If yes, the call is aborted with `BudgetExceededError`. A JSONL ledger is written per run.
+
+### 4.8 Distributed Mode (Redis + Celery)
+
+When `docker compose up -d` is running, both `EvalRunner` and `OversightRunner` detect the Redis URL and route through `celery_tasks.py`. The sync fallback provides identical semantics without Redis. `docker compose --profile monitoring up -d` enables the Flower task monitor at `:5555`.
 
 ---
 
@@ -278,19 +306,20 @@ Materializing agent outputs to JSONL before scoring means:
 |---|---|---|
 | Anthropic (default) | `pip install -e .` | `ANTHROPIC_API_KEY` |
 | OpenAI | `pip install -e ".[openai-backend]"` | `OPENAI_API_KEY` |
-| Ollama (local) | `pip install -e ".[ollama-backend]"` | None (local endpoint) |
+| Ollama (local, air-gapped) | `pip install -e ".[ollama-backend]"` | None |
 
-Each agent instantiates its LLM client via a provider factory keyed on `config.model`. The `docker-compose.yml` exposes `PROPOSER_MODEL`, `CRITIC_MODEL`, and `JUDGE_MODEL` as separate environment variables for heterogeneous provider configurations.
+The RAGAS evaluation backend must be configured separately via `configure_ragas_llm()` in `ragas_runner.py` — RAGAS defaults to OpenAI regardless of `config.model` if not explicitly set.
 
 ---
 
 ## 7. Known Architectural Limitations
 
 - **No GUI.** Verity is CLI + SDK only.
-- **LlamaGuard requires local GPU.** The `llamaguard_safety` metric uses `transformers` + `torch` and requires 16GB+ VRAM. Excluded from CI.
+- **LlamaGuard requires local GPU.** The `llamaguard_safety` metric uses `transformers` + `torch` and requires 16GB+ VRAM. Excluded from standard CI.
 - **Distributed mode not load-tested.** Celery + Redis is implemented and functional; large-scale concurrency has not been benchmarked.
-- **Judge sanitizer is partial.** Prompt injection resistance for the Judge is a known open problem. Current sanitizer covers common patterns.
+- **Judge sanitizer is partial.** Prompt injection resistance is a known open problem. See `SECURITY.md`.
 - **mypy union-attr on Anthropic SDK.** The Anthropic content block union type causes mypy to flag `.text` access. Suppressed with `# type: ignore[union-attr]`; runtime behavior is correct.
+- **`multi_session_persistence` has limited test coverage.** Longitudinal evaluation across multiple sessions requires a persistent dataset fixture not yet fully implemented in the test suite.
 
 ---
 

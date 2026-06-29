@@ -4,11 +4,8 @@ FIX-7: InputSanitizer applied before every judge call.
 Output: results.jsonl (streamed) + manifest.json (run summary).
 """
 from __future__ import annotations
-import asyncio
-import json
-import logging
-import time
-import uuid
+import asyncio, json, logging, time, uuid
+from pathlib import Path
 from typing import Any
 
 from eval_engine.config import EvalConfig
@@ -82,14 +79,32 @@ class EvalRunner:
         cfg = self.config
         run_result = RunResult(cfg.experiment_id, cfg)
 
+        # Phase 4: Set global seed for reproducibility
+        from eval_engine.reproducibility import set_global_seed
+        set_global_seed(cfg.seed)
+
         if cfg.dataset.sample_n and cfg.dataset.sample_n < len(dataset):
             import random
+            random.seed(cfg.seed)
             dataset = random.sample(dataset, cfg.dataset.sample_n)
 
         output_dir = cfg.output_dir / cfg.experiment_id
         output_dir.mkdir(parents=True, exist_ok=True)
         results_path = output_dir / "results.jsonl"
         manifest_path = output_dir / "manifest.json"
+
+        # Phase 4: Capture reproducibility bundle if --track
+        if cfg.track:
+            from eval_engine.reproducibility import ReproducibilityBundle
+            from eval_engine.dataset_manifest import DatasetManifest
+            repro = ReproducibilityBundle.from_config(cfg, seed=cfg.seed)
+            repro.capture()
+            repro.save(output_dir)
+            repro.print_summary()
+            if cfg.dataset.path.exists():
+                ds_manifest = DatasetManifest.from_file(cfg.dataset.path)
+                ds_manifest.save(output_dir)
+                ds_manifest.print_summary()
 
         metrics = []
         for metric_cfg in cfg.enabled_metrics:
@@ -101,7 +116,7 @@ class EvalRunner:
         if not metrics:
             raise RuntimeError("No metrics initialized. Check EvalConfig.")
 
-        logger.info(f"Run: {cfg.experiment_id} | {len(dataset)} records | {len(metrics)} metrics")
+        logger.info(f"Run: {cfg.experiment_id} | {len(dataset)} records | {len(metrics)} metrics | seed={cfg.seed}")
         self._semaphore = asyncio.Semaphore(cfg.async_cfg.max_concurrent_queries)
         batch_size = cfg.async_cfg.batch_size
         batches = [dataset[i:i+batch_size] for i in range(0, len(dataset), batch_size)]

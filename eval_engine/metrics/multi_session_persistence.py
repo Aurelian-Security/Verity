@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+import numpy as np
 
 from eval_engine.metrics.base import BaseMetric, MetricResult
 from eval_engine.schemas import GraphSnapshot, RetrievalCase, RetrievalResult

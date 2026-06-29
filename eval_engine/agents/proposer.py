@@ -95,6 +95,7 @@ class ProposerAgent(AgentBase):
 
         except Exception as e:
             from eval_engine.agents.agent_base import AgentTrace
+            import time, uuid
             dummy_trace = AgentTrace(
                 agent_role=self.role, model=self.model,
                 prompt_preview=user_prompt[:200], response_preview="",

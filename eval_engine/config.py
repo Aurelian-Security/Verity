@@ -184,13 +184,15 @@ class EvalConfig(BaseModel):
     architecture: RAGArchitecture
     model: SupportedModel | str = Field(..., description="LLM judge model string")
     dataset: DatasetConfig
-    metrics: list[MetricConfig] = Field(default_factory=list, min_length=1)
+    metrics: list[MetricConfig] = Field(default_factory=list, min_length=0)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
     async_cfg: AsyncConfig = Field(default_factory=AsyncConfig)
     statistics: StatisticsConfig = Field(default_factory=StatisticsConfig)
     output_dir: Path = Field(default=Path("outputs"))
     notes: str = Field(default="", description="Free-text run notes (logged to output manifest)")
+    seed: int = Field(default=42, description="Random seed for sampling, poisoning, perturbation")
+    track: bool = Field(default=False, description="If True, write reproducibility bundle and dataset manifest")
 
     @model_validator(mode="after")
     def validate_consolidation_delta_snapshots(self) -> "EvalConfig":

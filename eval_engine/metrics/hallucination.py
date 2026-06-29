@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from eval_engine.metrics.base import BaseMetric, MetricResult
@@ -291,7 +291,7 @@ class HallucinationMetric(BaseMetric):
             claims = _decompose_claims_simple(clean_answer)
 
         if not claims:
-            logger.warning("[hallucination] No claims extracted from answer.")
+            logger.warning(f"[hallucination] No claims extracted from answer.")
             return MetricResult(
                 metric_name=self.name,
                 score=0.0,

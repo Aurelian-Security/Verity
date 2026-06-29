@@ -32,9 +32,10 @@ Covers:
 
 from __future__ import annotations
 
+import pytest
 import numpy as np
 
-from eval_engine.schemas import RetrievalCase
+from eval_engine.schemas import RetrievalCase, RetrievalResult
 
 
 # =============================================================================
