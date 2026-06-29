@@ -13,7 +13,52 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 - Coverage reporting in CI
 - mypy strict mode (blocked by Anthropic SDK union-attr types)
 - Example dataset in `datasets/` for zero-setup quick start
-- GitHub Actions CI workflow
+- Tier 3 metric implementations (prerequisites: Papers 1–2 published, OOD test set, LatentIDS validated)
+- GUI analytics layer (Phase 5 — after empirical results exist)
+
+---
+
+## [0.4.0] — 2026-06
+
+### Added
+- **`consistency.py`** — Full implementation of Consistency / Stability metric.
+  - `score_multiple_runs()`: mean pairwise similarity across N answers (primary interface)
+  - `score()` accumulator mode + `compute_consistency_report()`: accumulate per-run, report when done
+  - Two similarity modes: `embedding` (sentence-transformers cosine similarity) and `jaccard` (token overlap, no dependencies)
+  - Consolidation Stability Index (CSI): post/pre consolidation drift ratio
+  - Score variance and verdict drift rate as secondary metrics
+  - Graceful fallback to jaccard if sentence-transformers not installed
+- **`constitutional_eval.py`** — Full implementation of Constitutional Evaluation metric.
+  - Five dimensions scored independently via LLM judge: harmlessness, honesty, transparency, non-manipulation, privacy_preservation
+  - Structured prompt per dimension — response parsed to float [0, 1]
+  - Weighted composite as primary score (equal weights default; customizable)
+  - `dry_run=True` mode returns deterministic mock scores at zero cost
+  - Dimensions below `failure_threshold` flagged in metadata
+- **`model_written_eval.py`** — Full implementation of Model Written Evaluation metric.
+  - Caller-defined `RubricCriterion` list — encodes any domain or governance standard
+  - Three criterion types: `binary` (PASS/FAIL), `scored_5` (1-5), `scored_10` (1-10)
+  - Required criteria: failure forces composite score to 0.0
+  - `default_governance_rubric()`: 4-criterion governance rubric (source attribution, uncertainty disclosure, scope adherence [required], response quality)
+  - `research_paper_rubric()`: 4-criterion research quality rubric (uses Sonnet)
+  - `dry_run=True` mode available
+- **`source_reliability.py`** — Full implementation of Source Reliability metric.
+  - Authority scoring: domain taxonomy (arxiv=0.85, nature.com=0.95, wikipedia=0.65, .gov=0.85, default=0.40) + peer-review bonus
+  - Citation scoring: logarithmic scale, configurable max
+  - Recency scoring: exponential decay, configurable half-life (default 365 days)
+  - Consistency: heuristic (authority variance proxy, free) or LLM judge (optional, `check_consistency=True`)
+  - `score_from_result()`: typed primary interface via `RetrievalResult`
+  - `score()`: kwarg interface (`source_metadata=[...]`) for EvalRunner integration
+- **`schemas.py` — `SourceMetadata` dataclass** — source provenance fields: source_id, source_url, domain, publisher, publication_date, citation_count, is_peer_reviewed. Full `to_dict()` serialization.
+- **`schemas.py` — `RetrievalResult.source_metadata`** — optional `list[SourceMetadata]` field; backward-compatible (defaults to None).
+
+### Changed
+- `test_scaffolds.py` — rewritten: Tier 2 tests verify real behavior; Tier 3 tests verify scaffold contract. Tier 2 no longer tested as scaffolds.
+- `reproducibility.py` — torch import catches `OSError` in addition to `ImportError` for broken torch installations.
+- `pyproject.toml` — version bumped to `0.4.0`.
+
+### Fixed
+- `reproducibility.py` — `set_global_seed()` no longer crashes if torch shared library is missing (OSError on import).
+- `consistency.py` — f-string formatting bug with None CSI value.
 
 ---
 

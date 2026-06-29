@@ -1,12 +1,12 @@
 # STATUS.md — Verity Implementation Maturity
 
-**Aurelian Security | Verity v0.3.0 | Updated: June 2026**
+**Aurelian Security | Verity v0.4.0 | Updated: June 2026**
 
 > This document separates what is implemented and tested from what is experimental or planned. Read this before citing Verity capabilities in a paper or presenting it to a research audience.
 
 ---
 
-## Current Version: v0.3.0
+## Current Version: v0.4.0
 
 Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking changes between minor versions are expected and will be documented in `CHANGELOG.md`.
 
@@ -43,7 +43,7 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 
 ### Metric Registry
 
-#### Implemented (17 metrics)
+#### Implemented (21 metrics)
 
 | Metric | Category | Test Coverage |
 |---|---|---|
@@ -61,22 +61,22 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 | `single_session_poisoning` | Adversarial robustness | Unit tested |
 | `query_perturbation` | Adversarial robustness | Unit tested |
 | `calibration` | Trust / alignment | Unit tested |
-| `hallucination_rate` | Trust / alignment | Unit tested (NLI mode) |
+| `hallucination_rate` | Trust / alignment | Unit tested |
 | `trust_score` | Trust / alignment | Unit tested |
 | `multi_session_persistence` | Longitudinal evaluation | ⚠️ Limited testing |
+| **`consistency`** | **Consistency / stability** | **Unit tested (Tier 2)** |
+| **`constitutional_eval`** | **Alignment rubric** | **Unit tested, dry-run (Tier 2)** |
+| **`model_written_eval`** | **Policy rubric** | **Unit tested, dry-run (Tier 2)** |
+| **`source_reliability`** | **Source provenance** | **Unit tested (Tier 2)** |
 
-#### Scaffolded — Interface Locked, Implementation Deferred (6 metrics)
+#### Scaffolded — Interface Locked, Implementation Deferred (2 metrics)
 
-These metrics have `BaseMetric`-compliant interfaces registered in the registry. Their `.score()` methods return placeholder `MetricResult` objects with `status: "scaffold"` in metadata — they do not raise exceptions but return zero scores.
+These metrics have `BaseMetric`-compliant interfaces registered in the registry. Their `.score()` methods return placeholder `MetricResult` objects with `status: "scaffold"` in metadata.
 
 | Metric | Target Tier | Blocker |
 |---|---|---|
-| `consistency` | Tier 2 | Requires multi-run dataset design |
-| `constitutional_eval` | Tier 2 | Requires Constitutional AI prompt library |
-| `model_written_eval` | Tier 2 | Requires eval dataset generation pipeline |
-| `source_reliability` | Tier 2 | Requires schema extension + external credibility DB |
-| `goal_misgeneralization` | Tier 3 | Active research; no consensus metric |
-| `deceptive_alignment` | Tier 3 | Active research; no consensus metric |
+| `goal_misgeneralization` | Tier 3 | Papers 1–2 published; OOD test set designed and validated |
+| `deceptive_alignment` | Tier 3 | Phase 3 RH detection validated on real data; LatentIDS available |
 
 ---
 
@@ -118,6 +118,34 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry.
 
 ---
 
+### Tier 2 Metrics (v0.4.0)
+
+| Component | Status | Notes |
+|---|---|---|
+| `consistency` — jaccard mode | ✅ Implemented | Token-overlap similarity; no dependencies |
+| `consistency` — embedding mode | ✅ Implemented | sentence-transformers cosine similarity; `pip install sentence-transformers` |
+| `consistency` — accumulator mode | ✅ Implemented | `score()` accumulates, `compute_consistency_report()` aggregates |
+| `consistency` — Consolidation Stability Index | ✅ Implemented | Pre/post drift ratio; requires pre_consolidation_answers |
+| `constitutional_eval` — 5 dimensions | ✅ Implemented | Harmlessness, honesty, transparency, non-manipulation, privacy |
+| `constitutional_eval` — dry-run mode | ✅ Implemented | Deterministic mock scores, zero API cost |
+| `constitutional_eval` — weighted composite | ✅ Implemented | Equal weighting default; customizable |
+| `model_written_eval` — binary criteria | ✅ Implemented | PASS/FAIL → 1.0/0.0 |
+| `model_written_eval` — scored criteria | ✅ Implemented | 1-5 and 1-10 scales normalized to 0.0–1.0 |
+| `model_written_eval` — required criteria | ✅ Implemented | Failure forces composite to 0.0 |
+| `model_written_eval` — default_governance_rubric() | ✅ Implemented | 4-criterion governance rubric |
+| `model_written_eval` — research_paper_rubric() | ✅ Implemented | 4-criterion research quality rubric |
+| `model_written_eval` — dry-run mode | ✅ Implemented | Mock scores, zero API cost |
+| `source_reliability` — authority scoring | ✅ Implemented | Domain taxonomy (arxiv=0.85, nature=0.95, wikipedia=0.65, etc.) |
+| `source_reliability` — citation scoring | ✅ Implemented | Logarithmic scale; 0 citations → 0.0 |
+| `source_reliability` — recency scoring | ✅ Implemented | Exponential decay; configurable half-life |
+| `source_reliability` — consistency heuristic | ✅ Implemented | Authority variance proxy; no LLM cost |
+| `source_reliability` — LLM consistency check | ✅ Implemented | Optional (`check_consistency=True`); adds API cost |
+| `source_reliability` — score_from_result() | ✅ Implemented | Typed interface via RetrievalResult |
+| `schemas.py` — SourceMetadata | ✅ Implemented | Full dataclass with all source provenance fields |
+| `schemas.py` — RetrievalResult.source_metadata | ✅ Implemented | Optional field; backward-compatible |
+
+---
+
 ### Reproducibility Infrastructure (v0.3.0)
 
 | Component | Status | Notes |
@@ -151,7 +179,7 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry.
 
 | Item | Status | Notes |
 |---|---|---|
-| `pytest` test suite (245 tests) | ✅ Passing | Unit + integration; 245/245 green |
+| `pytest` test suite (248 tests) | ✅ Passing | Unit + integration; 248/248 green |
 | `ruff` linting | ✅ Passing | |
 | `mypy` type checking | ⚠️ Non-blocking | Known union-attr issues with Anthropic SDK types |
 
