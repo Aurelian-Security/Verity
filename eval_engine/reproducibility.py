@@ -282,7 +282,7 @@ def set_global_seed(seed: int) -> None:
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
         logger.debug(f"[reproducibility] Torch seed set: {seed}")
-    except ImportError:
+    except (ImportError, OSError, Exception):
         pass
 
     logger.info(f"[reproducibility] Global seed set: {seed}")

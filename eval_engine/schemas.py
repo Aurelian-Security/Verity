@@ -12,9 +12,11 @@ SOURCE: Consolidation RAG eval framework (your code), with the following changes
           cycle_id, captured_at, experiment_id.
           Reason: untyped metadata dict cannot guarantee snapshot ordering
           for pre/post consolidation delta computation.
+  TIER 2: SourceMetadata dataclass added for source_reliability metric.
+           RetrievalResult gains optional source_metadata field.
 
 UNCHANGED from your original:
-  - RetrievalResult (verbatim)
+  - RetrievalResult core fields (verbatim)
   - All docstrings and inline comments (verbatim)
   - All optional fields on GraphSnapshot (verbatim)
 """
@@ -64,6 +66,39 @@ class RetrievalCase:
         )
 
 
+@dataclass
+class SourceMetadata:
+    """
+    Metadata for a single retrieved source document.
+
+    TIER 2 ADDITION: Required by source_reliability.py metric.
+    Pass a list of SourceMetadata alongside retrieved_ids in RetrievalResult
+    to enable source reliability scoring.
+
+    Fields are all optional — populate what your retrieval system provides.
+    At minimum, source_id is required for tracking.
+    """
+    source_id: str
+    source_url: str | None = None
+    domain: str | None = None                # e.g. "arxiv.org", "wikipedia.org"
+    publisher: str | None = None             # e.g. "Nature", "ACM"
+    publication_date: str | None = None      # ISO format: "2024-03-15"
+    citation_count: int | None = None        # Number of citations (if known)
+    is_peer_reviewed: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_id": self.source_id,
+            "source_url": self.source_url,
+            "domain": self.domain,
+            "publisher": self.publisher,
+            "publication_date": self.publication_date,
+            "citation_count": self.citation_count,
+            "is_peer_reviewed": self.is_peer_reviewed,
+        }
+
+
 @dataclass(frozen=True)
 class RetrievalResult:
     """Retrieved IDs for a benchmark query, ordered by rank."""
@@ -74,6 +109,11 @@ class RetrievalResult:
     # Retrieved item IDs in ranked order.
     # Index 0 is the top-ranked retrieval result.
     retrieved_ids: list[str]
+
+    # TIER 2 ADDITION: Optional source metadata per retrieved document.
+    # When provided, enables source_reliability scoring.
+    # Must be same length as retrieved_ids if provided.
+    source_metadata: list[SourceMetadata] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RetrievalResult":
