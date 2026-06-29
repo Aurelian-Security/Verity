@@ -90,7 +90,7 @@ The three architectural invariants that everything else flows from:
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  METRIC ENGINE  (eval_engine/metrics/)                                  │
-│  • 23 registered metrics (17 implemented, 6 scaffolded)                 │
+│  • 70 registered metrics (21 core + 47 expansion + 2 Tier 3 scaffolds)  │
 │  • BaseMetric ABC enforces .score() interface via Pydantic MetricResult │
 │  • Metrics read from JSONL — never call agents or mutate state          │
 │  • registry.register() supports runtime plugin injection                │
@@ -153,7 +153,7 @@ Verity/
 │   ├── comparison.py           ← compare_run_manifests(): run diff engine
 │   │
 │   ├── metrics/
-│   │   ├── __init__.py         ← MetricsRegistry: 23 registered metrics
+│   │   ├── __init__.py         ← MetricsRegistry: 70 registered metrics
 │   │   ├── base.py             ← BaseMetric ABC + MetricResult dataclass
 │   │   ├── retrieval_metrics.py     ← Recall@K, MRR, NDCG@K
 │   │   ├── graph_metrics.py         ← Compression delta, dedup delta, entity coverage
@@ -175,7 +175,8 @@ Verity/
 │   │   ├── model_written_eval.py    ← [Scaffold Tier 2]
 │   │   ├── source_reliability.py    ← [Scaffold Tier 2]
 │   │   ├── goal_misgeneralization.py ← [Scaffold Tier 3]
-│   │   └── deceptive_alignment.py   ← [Scaffold Tier 3]
+│   │   ├── deceptive_alignment.py   ← [Scaffold Tier 3]
+│   │   └── algorithm_expansion.py   ← 47-algorithm expansion registry (v0.5.0)
 │   │
 │   ├── agents/
 │   │   ├── agent_base.py       ← Shared base: real/dry-run dispatch, trace logging

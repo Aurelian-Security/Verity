@@ -6,10 +6,12 @@ Verity provides end-to-end evaluation infrastructure for consolidation-based and
 
 > *Trust, measured.*
 
-[![Tests](https://img.shields.io/badge/tests-245%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-253%20passed-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)]()
+
+> **Pre-1.0 research infrastructure.** The API is not stable. See [STATUS.md](STATUS.md) for implementation maturity, known limitations, and what is safe to cite in a paper.
 
 ---
 
@@ -30,6 +32,7 @@ Verity provides end-to-end evaluation infrastructure for consolidation-based and
 - [Configuration Reference](#configuration-reference)
 - [Output Structure](#output-structure)
 - [Environment Variables](#environment-variables)
+- [Security](#security)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -182,7 +185,7 @@ Diff two run manifests side by side.
 verity compare --run-a consolidation_eval_run1 --run-b consolidation_eval_run2
 ```
 
-Shows: metric score deltas, verdict distribution changes, dataset identity verification, git hash comparison.
+Shows: metric score deltas, verdict distribution changes, dataset identity verification, git hash comparison. Saves `outputs/compare_A_vs_B.json`.
 
 ---
 
@@ -296,7 +299,6 @@ class MyCustomMetric(BaseMetric):
     name = "my_metric"
 
     def score(self, question, contexts, answer, ground_truth=None, **kwargs):
-        # Your scoring logic here
         return MetricResult(metric_name=self.name, score=0.95)
 
 registry.register("my_metric", MyCustomMetric)
@@ -306,7 +308,9 @@ registry.register("my_metric", MyCustomMetric)
 
 ## Metric Registry
 
-### Implemented (17)
+Verity's registry contains **70 registered metrics** across three groups.
+
+### Core — Implemented (21)
 
 | Metric | Category | Description |
 |--------|----------|-------------|
@@ -327,22 +331,29 @@ registry.register("my_metric", MyCustomMetric)
 | `hallucination_rate` | Trust | Claim-level: unsupported / total claims |
 | `trust_score` | Trust | Weighted composite: safety + faithfulness + calibration + hallucination |
 | `multi_session_persistence` | Longitudinal | N-cycle forgetting curve, poison/truth persistence rates |
+| `consistency` | Stability | Answer drift score across N runs; Consolidation Stability Index |
+| `constitutional_eval` | Alignment | 5-dimension LLM rubric: harmlessness, honesty, transparency, non-manipulation, privacy |
+| `model_written_eval` | Policy | Caller-defined policy rubrics; binary/scored criteria; required criteria |
+| `source_reliability` | Provenance | Authority, citation, recency, and cross-source consistency scoring |
 
-### Scaffolded — Tier 2 (interfaces locked, implementation deferred)
+### Algorithm Expansion — 47 metrics (`algorithm_expansion.py`)
 
-| Metric | Research Question |
-|--------|------------------|
-| `consistency` | Does the system produce consistent answers across multiple runs? |
-| `constitutional_eval` | Does output satisfy harmlessness, honesty, transparency rubrics? |
-| `model_written_eval` | Does output satisfy caller-defined policy rubrics? |
-| `source_reliability` | How reliable are the sources that were retrieved? |
+47 additional metrics spanning alignment science, safety, and adversarial security. A mix of implemented heuristics and interface-locked scaffolds for algorithms requiring external models, GPU, or white-box access.
 
-### Scaffolded — Tier 3 (frontier research)
+**Alignment (15):** `constitutional_ai`, `rlhf_reward_model_probing`, `dpo_delta_scoring`, `activation_steering_vector_analysis`, `representation_engineering_probing`, `scalable_oversight_debate`, `process_based_supervision`, `weak_to_strong_generalization_probing`, `mechanistic_interpretability_circuit_detection`, `goodharts_law_metric_stress_testing`, `sycophancy_detection_suite`, `specification_gaming_detection`, `deceptive_alignment_behavioral_testing`, `truthfulness_calibration`, `alignment_tax_measurement`
+
+**Safety (17):** `poisoned_rag_detection`, `prompt_injection_resistance`, `jailbreak_robustness_benchmarking`, `llamaguard_input_output_classification`, `gcg_attack_generation`, `textattack_augmentation_pipeline`, `refusal_consistency_testing`, `multi_turn_safety_degradation_testing`, `hallucination_detection_ragas_factscore`, `toxic_content_classifier_ensemble`, `data_exfiltration_resistance_testing`, `backdoor_trigger_detection`, `membership_inference_attack_testing`, `contextual_integrity_violation_detection`, `semantic_consistency_distribution_shift`, `safe_decoding_integration`, `reward_model_overoptimization_detection`
+
+**Security (15):** `owasp_llm_top_10_compliance_audit`, `mitre_atlas_threat_mapping`, `indirect_prompt_injection_web_content`, `differential_privacy_compliance_testing`, `adversarial_retrieval_ranking_manipulation`, `embedding_inversion_attack_testing`, `supply_chain_integrity_verification`, `adversarial_document_chunking_attacks`, `cross_encoder_reranking_robustness`, `api_rate_limiting_abuse_detection`, `model_extraction_attack_resistance`, `cryptographic_audit_log_integrity`, `semantic_similarity_label_leakage_detection`, `red_team_coverage_matrix`, `adversarial_hyperparameter_search`
+
+### Scaffolded — Tier 3 (frontier research, 2)
 
 | Metric | Research Question |
 |--------|------------------|
 | `goal_misgeneralization` | Did the system optimize a proxy objective instead of the intended one? |
 | `deceptive_alignment` | Does the system behave differently when it detects evaluation? |
+
+> Scaffolded metrics have registered interfaces and return placeholder results. Do not include them in published benchmark results. See [STATUS.md](STATUS.md).
 
 ---
 
@@ -366,7 +377,7 @@ Proposer (Agent A) → Critic (Agent B) → Judge (Agent C)
 verity oversight-run --dataset datasets/eval_set.json --dry-run
 ```
 
-### Real run (uses API)
+### Real run
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -386,7 +397,7 @@ docker compose up -d      # Start Redis + workers
 verity oversight-run --dataset datasets/eval_set.json --celery
 ```
 
-Monitor workers at `http://localhost:5555` (Flower UI).
+Monitor workers at `http://localhost:5555` (Flower UI, requires `--profile monitoring`).
 
 ---
 
@@ -398,11 +409,7 @@ from eval_engine.statistics import StatEngine, StatReport
 engine = StatEngine(alpha=0.05)
 
 # Full pre/post analysis bundle (7 tests)
-results = engine.pre_post_bundle(
-    pre_scores,
-    post_scores,
-    metric_label="ndcg"
-)
+results = engine.pre_post_bundle(pre_scores, post_scores, metric_label="ndcg")
 # Returns: descriptive (x2), shapiro normality (x2),
 #          wilcoxon, cohens_d, cliffs_delta
 
@@ -420,11 +427,11 @@ report.save("outputs/stats_report.json")
 | `paired_ttest()` | Significance | Large samples with confirmed normality |
 | `cohens_d()` | Effect size | Standardized mean difference |
 | `cliffs_delta()` | Effect size | Non-parametric, adversarial distributions |
-| `pearson()` | Correlation | Linear relationships (hardware → performance) |
+| `pearson()` | Correlation | Linear relationships |
 | `spearman()` | Correlation | Monotonic non-linear relationships |
-| `shapiro()` | Normality | Gate before choosing parametric vs non-parametric |
+| `shapiro()` | Normality | Gate before parametric vs non-parametric |
 | `descriptive()` | Summary | Mean, median, std, IQR, min, max |
-| `pre_post_bundle()` | All-in-one | Full Paper 1 results table row |
+| `pre_post_bundle()` | All-in-one | Full results table row (7 tests) |
 
 ---
 
@@ -461,28 +468,23 @@ track: true
     "branch": "main",
     "dirty": false
   },
-  "installed_packages": {
-    "ragas": "0.1.9",
-    "pydantic": "2.5.0",
-    ...
-  },
-  "config_snapshot": { ... }
+  "installed_packages": { "ragas": "0.1.9", "pydantic": "2.5.0" },
+  "config_snapshot": { "..." }
 }
 ```
+
+> **Paper submission note:** Commit all changes before running experiments. If `git.dirty` is `true`, results may not be reproducible from `git.hash` alone.
 
 ### Programmatic usage
 
 ```python
 from eval_engine.reproducibility import ReproducibilityBundle, set_global_seed
 
-# Set seed globally (Python random + numpy + torch)
-set_global_seed(42)
+set_global_seed(42)   # Seeds Python random + numpy + torch
 
-# Capture bundle
 bundle = ReproducibilityBundle.from_config(config, seed=42)
 bundle.capture()
 bundle.save(output_dir)
-bundle.print_summary()
 ```
 
 ---
@@ -497,19 +499,11 @@ Every dataset is content-addressed by SHA-256 hash. The hash is the version ID.
 verity manifest datasets/eval_set.json --version-tag v1.0 --output manifests/
 ```
 
-### Programmatic usage
+### Dataset lineage (poisoning pipeline)
 
 ```python
 from eval_engine.dataset_manifest import DatasetManifest
 
-manifest = DatasetManifest.from_file("datasets/eval_set.json", version_tag="v1.0")
-manifest.print_summary()
-manifest.save("outputs/run1/")
-```
-
-### Dataset lineage (poisoning pipeline)
-
-```python
 manifest = DatasetManifest.from_file("datasets/eval_set.json")
 
 manifest.add_lineage_step(
@@ -519,12 +513,6 @@ manifest.add_lineage_step(
     attack_type="factual_substitution",
     seed=42,
 )
-
-manifest.add_lineage_step(
-    "consolidation_cycle_1",
-    output_path="datasets/consolidated_eval_set.json",
-)
-
 manifest.save("outputs/poisoning_run1/")
 ```
 
@@ -538,21 +526,13 @@ manifest.save("outputs/poisoning_run1/")
 verity compare --run-a consolidation_eval_run1 --run-b consolidation_eval_run2
 ```
 
-Output includes:
-
-- **Run identity:** experiment IDs, git hashes, seeds
-- **Dataset identity:** SHA-256 hash match verification (warns if datasets differ)
-- **Metric score deltas:** per-metric delta and % change
-- **Verdict distribution:** Pass/Conditional/Fail count changes
-- **Run statistics:** duration, success rate, record counts
-
-Saves `outputs/compare_A_vs_B.json` for paper appendix.
+Output includes metric score deltas, verdict distribution changes, dataset SHA-256 identity verification (warns if datasets differ), git hash comparison, and run statistics. Saves `outputs/compare_A_vs_B.json`.
 
 ```python
 from eval_engine.comparison import compare_run_manifests
 
 report = compare_run_manifests("run_001", "run_002", output_dir=Path("outputs"))
-print(report["score_deltas"])    # {"ndcg": +0.06, "recall_at_k": +0.03}
+print(report["score_deltas"])    # {"ndcg": 0.06, "recall_at_k": 0.03}
 print(report["same_dataset"])    # True
 ```
 
@@ -560,42 +540,22 @@ print(report["same_dataset"])    # True
 
 ## Distributed Execution
 
-### Setup
-
 ```bash
-# 1. Copy environment template and set API key
-cp .env.example .env
+cp .env.example .env                          # Set ANTHROPIC_API_KEY
+docker compose up -d                          # Start Redis + workers
+docker compose up -d --scale worker=4         # Scale workers
+docker compose --profile monitoring up -d     # Flower UI at :5555
 
-# 2. Start Redis broker + Celery workers
-docker compose up -d
-
-# 3. Scale workers (4 parallel debate rounds = 12 concurrent API calls)
-docker compose up -d --scale worker=4
-
-# 4. Monitor at http://localhost:5555
-docker compose --profile monitoring up -d
-```
-
-### Run against distributed workers
-
-```bash
 verity oversight-run --dataset datasets/eval_set.json --celery --concurrency 4
 ```
 
-### Environment configuration (`.env`)
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-PROPOSER_MODEL=claude-haiku-4-5
-CRITIC_MODEL=claude-sonnet-4-6
-JUDGE_MODEL=claude-haiku-4-5
-WORKER_CONCURRENCY=4
-DRY_RUN=false
-```
+> **Security note:** The default Redis configuration has no authentication. Add `requirepass` and set `REDIS_URL=redis://:password@redis:6379/0` before any non-localhost deployment. See [SECURITY.md](SECURITY.md).
 
 ---
 
 ## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, data flow diagrams, and component deep-dives.
 
 ```
 eval_engine/
@@ -604,57 +564,26 @@ eval_engine/
   runner.py                 ← Async EvalRunner (semaphore, retry, JSONL streaming)
   cost_tracker.py           ← Per-call token + cost accounting, budget enforcement
   sanitizer.py              ← Prompt injection sanitization for judge calls
-  statistics.py             ← StatEngine (9 statistical methods)
+  statistics.py             ← StatEngine (9 statistical methods + StatReport)
   schemas.py                ← Typed evaluation data structures
   reproducibility.py        ← Seed, git hash, dependency capture per run
   dataset_manifest.py       ← SHA-256 content hashing + lineage tracking
   comparison.py             ← Run diff engine (verity compare)
 
-  metrics/
-    __init__.py             ← MetricsRegistry (23 metrics: 17 implemented, 6 scaffolds)
-    base.py                 ← BaseMetric ABC + MetricResult dataclass
-    retrieval_metrics.py    ← Recall@K, MRR, NDCG@K (your code, verbatim)
-    graph_metrics.py        ← Compression, deduplication, entity coverage (your code)
-    ragas_adapter.py        ← RAGAS dataset conversion (your code)
-    ragas_runner.py         ← RAGAS execution + LLM backend config
-    ragas_grounding.py      ← Single-phase RAGAS grounding metric
-    ragas_consolidation_delta.py  ← Pre/post consolidation delta
-    llamaguard.py           ← LlamaGuard-3-8B safety classifier
-    calibration.py          ← ECE + Brier Score
-    hallucination.py        ← Claim-level hallucination rate
-    trust_score.py          ← Composite trust score
-    multi_session_persistence.py  ← N-cycle forgetting curve
-    per_stage_ablation.py   ← Stage contribution measurement
-    threshold_compute_budget.py   ← Compute budget curve
-    single_session_poisoning.py   ← Adversarial robustness
-    query_perturbation.py   ← Query perturbation robustness
-    [6 scaffold modules]    ← Tier 2/3 interfaces locked
-
-  agents/
-    agent_base.py           ← Shared base, real/dry-run dispatch, trace logging
-    proposer.py             ← Agent A: grounded answer generation
-    critic.py               ← Agent B: reward hacking detection
-    judge.py                ← Agent C: verdict synthesis
-
-  orchestration/
-    debate_round.py         ← Single A→B→C pipeline unit
-    oversight_runner.py     ← Batch debate execution + stats + manifest
-    celery_tasks.py         ← Distributed queue + sync fallback
+  metrics/                  ← 70 registered metrics (21 core + 47 expansion + 2 Tier 3 scaffolds)
+  agents/                   ← Proposer → Critic → Judge agents
+  orchestration/            ← DebateRound, OversightRunner, Celery tasks
 ```
 
 ---
 
 ## Configuration Reference
 
-Full YAML config example:
-
 ```yaml
-# Experiment identity
 experiment_id: consolidation_eval_run1
 architecture: consolidation          # centralized | decentralized | consolidation
-model: claude-sonnet-4-6             # LLM judge model
+model: claude-sonnet-4-6
 
-# Dataset
 dataset:
   path: datasets/eval_set.json
   format: json                       # json | jsonl | csv | parquet
@@ -664,7 +593,6 @@ dataset:
   ground_truth_col: ground_truth
   sample_n: null                     # null = full dataset
 
-# Metrics
 metrics:
   - name: ndcg
     enabled: true
@@ -679,36 +607,30 @@ metrics:
       mode: local
       quantize: true                 # Required for 12GB VRAM GPUs
 
-# Budget
 budget:
   max_usd: 5.00
   warn_at_pct: 0.80
   track_tokens: true
 
-# Async execution
 async_cfg:
   max_concurrent_queries: 10
   batch_size: 50
   timeout_seconds: 30.0
 
-# Retry
 retry:
   max_retries: 3
   backoff_base_seconds: 2.0
   backoff_max_seconds: 60.0
 
-# Statistics
 statistics:
   tests: [wilcoxon, cohens_d]
   alpha: 0.05
   save_figures: true
   figures_dir: outputs/figures
 
-# Reproducibility (Phase 4)
 seed: 42
 track: true
 
-# Output
 output_dir: outputs
 notes: "Consolidation delta evaluation — primary run."
 ```
@@ -717,11 +639,11 @@ notes: "Consolidation delta evaluation — primary run."
 
 ## Output Structure
 
-### Metric evaluation run (`verity run`)
+### Metric evaluation (`verity run`)
 
 ```
 outputs/{experiment_id}/
-  results.jsonl              ← Per-query scores (streamed as queries complete)
+  results.jsonl              ← Per-query scores (streamed)
   manifest.json              ← Run summary: scores, duration, success rate
   cost_ledger_{id}.jsonl     ← Per-call token and cost log
   reproducibility.json       ← Seed, git hash, deps (when --track)
@@ -744,7 +666,7 @@ outputs/{experiment_id}/
 
 ```
 outputs/
-  compare_{run_a}_vs_{run_b}.json   ← Score deltas, dataset identity, git hashes
+  compare_{run_a}_vs_{run_b}.json
 ```
 
 ---
@@ -752,18 +674,28 @@ outputs/
 ## Environment Variables
 
 ```bash
-# Required for real (non dry-run) API calls
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-...       # Required for real API calls
+OPENAI_API_KEY=sk-...              # Optional — OpenAI judge models
+REDIS_URL=redis://localhost:6379/0 # Celery distributed mode
 
-# Optional
-OPENAI_API_KEY=sk-...              # For OpenAI judge models
-REDIS_URL=redis://localhost:6379/0 # For Celery distributed mode
-
-# Agent model overrides (also settable via CLI flags)
+# Agent model overrides (also settable via CLI)
 PROPOSER_MODEL=claude-haiku-4-5
 CRITIC_MODEL=claude-sonnet-4-6
 JUDGE_MODEL=claude-haiku-4-5
 ```
+
+---
+
+## Security
+
+Verity has a genuine threat model authored by a CISSP-certified security professional. See [SECURITY.md](SECURITY.md) for:
+
+- Trust boundary diagram
+- Prompt injection (OWASP LLM01) mitigation and residual risk
+- Excessive agency (OWASP LLM08) controls
+- Redis state poisoning risk in distributed mode
+- API key exposure controls
+- Responsible disclosure policy
 
 ---
 
@@ -783,7 +715,9 @@ Adding a new metric:
 1. Implement `BaseMetric` in `eval_engine/metrics/your_metric.py`
 2. Register in `eval_engine/metrics/__init__.py`
 3. Add tests in `eval_engine/tests/`
-4. Submit PR
+4. Submit PR with CLA sign-off
+
+See [STATUS.md](STATUS.md) for implementation maturity and [ARCHITECTURE.md](ARCHITECTURE.md) for system design before contributing.
 
 ---
 

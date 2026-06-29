@@ -1,12 +1,12 @@
 # STATUS.md — Verity Implementation Maturity
 
-**Aurelian Security | Verity v0.4.0 | Updated: June 2026**
+**Aurelian Security | Verity v0.5.0 | Updated: June 2026**
 
 > This document separates what is implemented and tested from what is experimental or planned. Read this before citing Verity capabilities in a paper or presenting it to a research audience.
 
 ---
 
-## Current Version: v0.4.0
+## Current Version: v0.5.0
 
 Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking changes between minor versions are expected and will be documented in `CHANGELOG.md`.
 
@@ -69,7 +69,19 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 | **`model_written_eval`** | **Policy rubric** | **Unit tested, dry-run (Tier 2)** |
 | **`source_reliability`** | **Source provenance** | **Unit tested (Tier 2)** |
 
-#### Scaffolded — Interface Locked, Implementation Deferred (2 metrics)
+#### Algorithm Expansion Registry — 47 metrics (v0.5.0)
+
+47 additional metrics in `eval_engine/metrics/algorithm_expansion.py` spanning alignment, safety, and adversarial security. All registered in `MetricsRegistry` and addressable via `verity run`.
+
+| Domain | Count | Status |
+|--------|-------|--------|
+| Alignment | 15 | Mix of deterministic heuristics and scaffolds |
+| Safety | 17 | Mix of deterministic heuristics and scaffolds |
+| Security / Adversarial | 15 | Mix of deterministic heuristics and scaffolds |
+
+Heuristic implementations are deterministic, dependency-free, and fully tested. Scaffold implementations follow the standard scaffold contract (`status: "scaffold"`, zero score) and require external models, GPU, or white-box access. **Algorithms 48–50 excluded intentionally** (proprietary moat features).
+
+#### Scaffolded — Tier 3 (2 metrics, frontier research prerequisites)
 
 These metrics have `BaseMetric`-compliant interfaces registered in the registry. Their `.score()` methods return placeholder `MetricResult` objects with `status: "scaffold"` in metadata.
 
@@ -179,7 +191,7 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry.
 
 | Item | Status | Notes |
 |---|---|---|
-| `pytest` test suite (248 tests) | ✅ Passing | Unit + integration; 248/248 green |
+| `pytest` test suite (253 tests) | ✅ Passing | Unit + integration; 253/253 green |
 | `ruff` linting | ✅ Passing | |
 | `mypy` type checking | ⚠️ Non-blocking | Known union-attr issues with Anthropic SDK types |
 

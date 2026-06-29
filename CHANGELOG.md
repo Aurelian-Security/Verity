@@ -18,6 +18,27 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 
 ---
 
+## [0.5.0] — 2026-06
+
+### Added
+- **`algorithm_expansion.py`** — 47-algorithm expansion registry spanning alignment, safety, and adversarial security domains. Mix of deterministic heuristic implementations (dependency-free, fully testable) and interface-locked scaffolds for algorithms requiring external models, GPU, or white-box access.
+  - **Alignment (15):** constitutional_ai, rlhf_reward_model_probing, dpo_delta_scoring, activation_steering_vector_analysis, representation_engineering_probing, scalable_oversight_debate, process_based_supervision, weak_to_strong_generalization_probing, mechanistic_interpretability_circuit_detection, goodharts_law_metric_stress_testing, sycophancy_detection_suite, specification_gaming_detection, deceptive_alignment_behavioral_testing, truthfulness_calibration, alignment_tax_measurement
+  - **Safety (17):** poisoned_rag_detection, prompt_injection_resistance, jailbreak_robustness_benchmarking, llamaguard_input_output_classification, gcg_attack_generation, textattack_augmentation_pipeline, refusal_consistency_testing, multi_turn_safety_degradation_testing, hallucination_detection_ragas_factscore, toxic_content_classifier_ensemble, data_exfiltration_resistance_testing, backdoor_trigger_detection, membership_inference_attack_testing, contextual_integrity_violation_detection, semantic_consistency_distribution_shift, safe_decoding_integration, reward_model_overoptimization_detection
+  - **Security (15):** owasp_llm_top_10_compliance_audit, mitre_atlas_threat_mapping, indirect_prompt_injection_web_content, differential_privacy_compliance_testing, adversarial_retrieval_ranking_manipulation, embedding_inversion_attack_testing, supply_chain_integrity_verification, adversarial_document_chunking_attacks, cross_encoder_reranking_robustness, api_rate_limiting_abuse_detection, model_extraction_attack_resistance, cryptographic_audit_log_integrity, semantic_similarity_label_leakage_detection, red_team_coverage_matrix, adversarial_hyperparameter_search
+- **47 new `TestName` enum members** in `config.py` — all expansion metrics addressable from YAML config.
+- **`ALGORITHM_EXPANSION_REGISTRY`** dict exported from `algorithm_expansion.py` — merged into `_BUILTIN_REGISTRY` via `_BUILTIN_REGISTRY.update()` in `metrics/__init__.py`.
+- **`tests/test_algorithm_expansion.py`** — 5 tests: registry count (47), MetricResult shape for all metrics, and 3 behavioral assertions (prompt injection bypass detection, supply chain hash verification, Merkle chain integrity).
+
+### Changed
+- `metrics/__init__.py` — two lines added: import of `ALGORITHM_EXPANSION_REGISTRY` and `_BUILTIN_REGISTRY.update()` call. Total registry: 70 metrics.
+- `pyproject.toml` — version bumped to `0.5.0`.
+
+### Notes
+- Algorithms 48–50 excluded intentionally (proprietary moat features: Trust Calibration Under Deceptive Context, Federated Evaluation Privacy, Continuous Red Team Loop).
+- `HeuristicMetric` and `ScaffoldMetric` base classes defined in `algorithm_expansion.py` as internal helpers — not exported from the main registry.
+
+---
+
 ## [0.4.0] — 2026-06
 
 ### Added
