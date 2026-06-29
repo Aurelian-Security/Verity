@@ -80,6 +80,10 @@ _BUILTIN_REGISTRY: dict[str, type[BaseMetric]] = {
     "deceptive_alignment":          DeceptiveAlignmentMetric,
 }
 
+# Merge 47-algorithm expansion registry (algorithms 1-47; 48-50 excluded intentionally)
+from eval_engine.metrics.algorithm_expansion import ALGORITHM_EXPANSION_REGISTRY
+_BUILTIN_REGISTRY.update(ALGORITHM_EXPANSION_REGISTRY)
+
 class MetricsRegistry:
     def __init__(self) -> None:
         self._registry: dict[str, type[BaseMetric]] = dict(_BUILTIN_REGISTRY)
