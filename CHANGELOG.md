@@ -18,6 +18,28 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 
 ---
 
+## [0.5.1] — 2026-06
+
+### Added
+- **`retrieval_rankers.py`** — Four classical IR ranking algorithms implemented as `BaseMetric` plugins:
+  - **`bm25`** (`BM25Metric`): BM25 probabilistic ranking (k1=1.5, b=0.75 defaults). Scores each context against query terms; returns ranked context list with per-context BM25 scores. No dependencies.
+  - **`rrf`** (`ReciprocalRankFusionMetric`): Reciprocal Rank Fusion. Accepts multiple ranked lists via `rankings` kwarg; merges into a single consensus ranking using RRF formula (k=60 default). Useful for hybrid dense + sparse retrieval evaluation.
+  - **`mmr`** (`MMRMetric`): Maximal Marginal Relevance. Selects top-k contexts balancing query relevance against redundancy. `lambda_mult` kwarg (default 0.7) controls relevance vs diversity trade-off.
+  - **`ltr_heuristic`** (`LearningToRankHeuristicMetric`): Lightweight learning-to-rank heuristic using weighted overlap of query terms (0.45), answer terms (0.35), and ground truth terms (0.20). Weights configurable via `weights` kwarg.
+- **`RETRIEVAL_RANKER_REGISTRY`** exported from `retrieval_rankers.py` — merged into `_BUILTIN_REGISTRY` in `metrics/__init__.py`.
+- **4 new `TestName` enum members** in `config.py`: `BM25`, `RRF`, `MMR`, `LTR_HEURISTIC`.
+- **`tests/test_retrieval_rankers.py`** — 12 tests covering BM25 scoring, RRF fusion, MMR diversity selection, and LTR heuristic ranking.
+
+### Changed
+- `metrics/__init__.py` — `RETRIEVAL_RANKER_REGISTRY` imported and merged. Total registry: 74 metrics.
+- `pyproject.toml` — version bumped to `0.5.1`.
+
+### Notes
+- **MRR vs MMR naming:** Verity has two similarly named metrics. `mean_reciprocal_rank` (MRR) is a retrieval effectiveness metric measuring rank of first relevant result. `mmr` (MMR) is Maximal Marginal Relevance, a diversity-aware ranking algorithm. They are distinct; comments, tests, and config names make this explicit.
+- All four rankers are dependency-free heuristic implementations using tokenized Jaccard similarity internally. No sentence-transformers or GPU required.
+
+---
+
 ## [0.5.0] — 2026-06
 
 ### Added
@@ -34,7 +56,7 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 - `pyproject.toml` — version bumped to `0.5.0`.
 
 ### Notes
-- Algorithms 48–50 excluded intentionally (proprietary moat features: Trust Calibration Under Deceptive Context, Federated Evaluation Privacy, Continuous Red Team Loop).
+- Algorithms 48–50 are not included in this release.
 - `HeuristicMetric` and `ScaffoldMetric` base classes defined in `algorithm_expansion.py` as internal helpers — not exported from the main registry.
 
 ---

@@ -11,6 +11,7 @@ IMPLEMENTED (Phase 1-3 + Tier 1):
     per_stage_ablation, threshold_compute_budget
     single_session_poisoning, query_perturbation
     calibration, hallucination_rate, trust_score, multi_session_persistence
+    bm25, rrf, mmr, ltr_heuristic
 
 SCAFFOLD — Tier 2 (interface locked, implementation deferred):
     consistency, constitutional_eval, model_written_eval, source_reliability
@@ -37,6 +38,7 @@ from eval_engine.metrics.calibration import CalibrationMetric
 from eval_engine.metrics.hallucination import HallucinationMetric
 from eval_engine.metrics.trust_score import TrustScoreMetric
 from eval_engine.metrics.multi_session_persistence import MultiSessionPersistenceMetric
+from eval_engine.metrics.retrieval_rankers import  BM25Metric,  ReciprocalRankFusionMetric, MMRMetric, LearningToRankHeuristicMetric
 # Tier 2 scaffolds
 from eval_engine.metrics.consistency import ConsistencyMetric
 from eval_engine.metrics.constitutional_eval import ConstitutionalEvalMetric
@@ -70,6 +72,10 @@ _BUILTIN_REGISTRY: dict[str, type[BaseMetric]] = {
     "hallucination_rate":           HallucinationMetric,
     "trust_score":                  TrustScoreMetric,
     "multi_session_persistence":    MultiSessionPersistenceMetric,
+    "bm25":                         BM25Metric,
+    "rrf":                          ReciprocalRankFusionMetric,
+    "mmr":                          MMRMetric,
+    "ltr_heuristic":                LearningToRankHeuristicMetric,
     # --- TIER 2 SCAFFOLDS ---
     "consistency":                  ConsistencyMetric,
     "constitutional_eval":          ConstitutionalEvalMetric,
@@ -137,5 +143,5 @@ __all__ = [
     "ConsistencyMetric", "ConstitutionalEvalMetric",
     "ModelWrittenEvalMetric", "SourceReliabilityMetric",
     "GoalMisgeneralizationMetric", "DeceptiveAlignmentMetric",
-    "MetricsRegistry", "registry",
+    "MetricsRegistry", "registry", "bm25", "rrf", "mmr", "ltr_heuristic",
 ]

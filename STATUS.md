@@ -1,6 +1,6 @@
 # STATUS.md — Verity Implementation Maturity
 
-**Aurelian Security | Verity v0.5.0 | Updated: June 2026**
+**Aurelian Security | Verity v0.5.1 | Updated: June 2026**
 
 > This document separates what is implemented and tested from what is experimental or planned. Read this before citing Verity capabilities in a paper or presenting it to a research audience.
 
@@ -43,7 +43,7 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 
 ### Metric Registry
 
-#### Implemented (21 metrics)
+#### Implemented (25 metrics)
 
 | Metric | Category | Test Coverage |
 |---|---|---|
@@ -68,6 +68,10 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 | **`constitutional_eval`** | **Alignment rubric** | **Unit tested, dry-run (Tier 2)** |
 | **`model_written_eval`** | **Policy rubric** | **Unit tested, dry-run (Tier 2)** |
 | **`source_reliability`** | **Source provenance** | **Unit tested (Tier 2)** |
+| **`bm25`** | **Retrieval ranking** | **Unit tested** |
+| **`rrf`** | **Retrieval ranking** | **Unit tested** |
+| **`mmr`** | **Retrieval ranking** | **Unit tested** |
+| **`ltr_heuristic`** | **Retrieval ranking** | **Unit tested** |
 
 #### Algorithm Expansion Registry — 47 metrics (v0.5.0)
 
@@ -75,11 +79,12 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 
 | Domain | Count | Status |
 |--------|-------|--------|
-| Alignment | 15 | Mix of deterministic heuristics and scaffolds |
-| Safety | 17 | Mix of deterministic heuristics and scaffolds |
-| Security / Adversarial | 15 | Mix of deterministic heuristics and scaffolds |
+| Alignment | 15 | 9 heuristic, 6 scaffold |
+| Safety | 17 | 13 heuristic, 4 scaffold |
+| Security / Adversarial | 15 | 9 heuristic, 6 scaffold |
+| **Total** | **47** | **31 heuristic, 16 scaffold** |
 
-Heuristic implementations are deterministic, dependency-free, and fully tested. Scaffold implementations follow the standard scaffold contract (`status: "scaffold"`, zero score) and require external models, GPU, or white-box access. **Algorithms 48–50 excluded intentionally** (proprietary moat features).
+Heuristic implementations are deterministic, dependency-free, and fully tested. Scaffold implementations follow the standard scaffold contract (`status: "scaffold"`, zero score) and require external models, GPU, or white-box access. **Algorithms 48–50 are not included in this release.**
 
 #### Scaffolded — Tier 3 (2 metrics, frontier research prerequisites)
 
@@ -230,6 +235,6 @@ Do not include scaffolded metrics in published benchmark results.
 
 ---
 
-*Verity is reproducible open-source research infrastructure for AI assurance, RAG evaluation, and scalable oversight. It is not a finished enterprise product.*
+*Verity is reproducible open-source research infrastructure for RAG evaluation and adversarial robustness testing. It is not a finished enterprise product.*
 
 *© 2026 Aurelian Security — MIT License*

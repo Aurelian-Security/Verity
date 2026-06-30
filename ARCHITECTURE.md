@@ -8,7 +8,7 @@
 
 ## 1. System Overview
 
-Verity is a CLI-driven, asynchronous evaluation harness for RAG architectures. It decouples *generative workloads* (LLM-driven debate rounds, answer synthesis) from *scoring workloads* (statistical metrics, RAGAS grounding, safety classification) to achieve reproducible, enterprise-scale evaluation without introducing shared mutable state between runs.
+Verity is a CLI-driven, asynchronous evaluation harness for RAG architectures. It decouples *generative workloads* (LLM-driven debate rounds, answer synthesis) from *scoring workloads* (statistical metrics, RAGAS grounding, safety classification) to achieve reproducible, consistent evaluation without introducing shared mutable state between runs.
 
 The three architectural invariants that everything else flows from:
 
@@ -90,7 +90,7 @@ The three architectural invariants that everything else flows from:
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  METRIC ENGINE  (eval_engine/metrics/)                                  │
-│  • 70 registered metrics (21 core + 47 expansion + 2 Tier 3 scaffolds)  │
+│  • 74 registered metrics (21 core + 4 rankers + 47 expansion + 2 Tier 3 scaffolds)  │
 │  • BaseMetric ABC enforces .score() interface via Pydantic MetricResult │
 │  • Metrics read from JSONL — never call agents or mutate state          │
 │  • registry.register() supports runtime plugin injection                │
@@ -153,9 +153,10 @@ Verity/
 │   ├── comparison.py           ← compare_run_manifests(): run diff engine
 │   │
 │   ├── metrics/
-│   │   ├── __init__.py         ← MetricsRegistry: 70 registered metrics
+│   │   ├── __init__.py         ← MetricsRegistry: 74 registered metrics
 │   │   ├── base.py             ← BaseMetric ABC + MetricResult dataclass
 │   │   ├── retrieval_metrics.py     ← Recall@K, MRR, NDCG@K
+│   │   ├── retrieval_rankers.py     ← BM25, RRF, MMR, LTR heuristic (v0.5.1)
 │   │   ├── graph_metrics.py         ← Compression delta, dedup delta, entity coverage
 │   │   ├── ragas_adapter.py         ← RAGAS dataset conversion
 │   │   ├── ragas_runner.py          ← RAGAS execution + LLM backend config
@@ -324,6 +325,6 @@ The RAGAS evaluation backend must be configured separately via `configure_ragas_
 
 ---
 
-*Verity is reproducible open-source research infrastructure for AI assurance, RAG evaluation, and scalable oversight. It is not a finished enterprise product.*
+*Verity is reproducible open-source research infrastructure for RAG evaluation and adversarial robustness testing. It is not a finished enterprise product.*
 
 *© 2026 Aurelian Security — MIT License*

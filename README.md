@@ -1,8 +1,8 @@
 # Verity Evaluation Engine
 
-**Verity** is an open-source AI assurance and RAG evaluation platform built by [Aurelian Security](https://github.com/Aurelian-Security).
+**Verity** is an open-source RAG evaluation SDK built by [Aurelian Security](https://github.com/Aurelian-Security).
 
-Verity provides end-to-end evaluation infrastructure for consolidation-based and adversarial RAG architectures — CLI-driven, async-batched, with pluggable metrics, multi-agent oversight, distributed orchestration, statistical analysis, reproducible experiment tracking, and per-run cost accounting.
+Verity provides a reproducible evaluation harness for RAG architectures — CLI-driven, async-batched, with pluggable metrics, multi-agent oversight, statistical analysis, experiment tracking, and per-run cost accounting. Designed to support publication-grade reproducibility and adversarial robustness testing.
 
 > *Trust, measured.*
 
@@ -308,7 +308,7 @@ registry.register("my_metric", MyCustomMetric)
 
 ## Metric Registry
 
-Verity's registry contains **70 registered metrics** across three groups.
+Verity's registry contains **74 registered metrics** across four groups.
 
 ### Core — Implemented (21)
 
@@ -336,9 +336,34 @@ Verity's registry contains **70 registered metrics** across three groups.
 | `model_written_eval` | Policy | Caller-defined policy rubrics; binary/scored criteria; required criteria |
 | `source_reliability` | Provenance | Authority, citation, recency, and cross-source consistency scoring |
 
+### Retrieval Ranking — Implemented (4)
+
+Classical IR ranking algorithms available as standalone metrics or combined with retrieval effectiveness metrics.
+
+| Metric | Category | Description |
+|--------|----------|-------------|
+| `bm25` | Retrieval Ranking | BM25 probabilistic ranking; scores contexts against query terms |
+| `rrf` | Retrieval Ranking | Reciprocal Rank Fusion; merges multiple rankings into a consensus ranking |
+| `mmr` | Retrieval Ranking | Maximal Marginal Relevance; balances relevance against redundancy |
+| `ltr_heuristic` | Retrieval Ranking | Learning-to-rank heuristic; weighted query/answer/ground-truth overlap |
+
+**Retrieval effectiveness** (Recall@K, MRR, NDCG) answers: were the right documents retrieved?
+**Retrieval ranking** (BM25, RRF, MMR, LTR) answers: were they ranked in the right order and with appropriate diversity?
+
+```yaml
+# Example config combining both layers
+metrics:
+  - name: recall_at_k
+  - name: ndcg
+  - name: bm25
+  - name: rrf
+  - name: mmr
+  - name: ltr_heuristic
+```
+
 ### Algorithm Expansion — 47 metrics (`algorithm_expansion.py`)
 
-47 additional metrics spanning alignment science, safety, and adversarial security. A mix of implemented heuristics and interface-locked scaffolds for algorithms requiring external models, GPU, or white-box access.
+47 additional metrics spanning alignment, safety, and adversarial security. **31 are deterministic heuristic implementations** (no dependencies, fully tested). **16 are interface-locked scaffolds** requiring external models, GPU, or white-box access — they return zero scores with `status: "scaffold"` metadata until those prerequisites are met.
 
 **Alignment (15):** `constitutional_ai`, `rlhf_reward_model_probing`, `dpo_delta_scoring`, `activation_steering_vector_analysis`, `representation_engineering_probing`, `scalable_oversight_debate`, `process_based_supervision`, `weak_to_strong_generalization_probing`, `mechanistic_interpretability_circuit_detection`, `goodharts_law_metric_stress_testing`, `sycophancy_detection_suite`, `specification_gaming_detection`, `deceptive_alignment_behavioral_testing`, `truthfulness_calibration`, `alignment_tax_measurement`
 
@@ -570,7 +595,7 @@ eval_engine/
   dataset_manifest.py       ← SHA-256 content hashing + lineage tracking
   comparison.py             ← Run diff engine (verity compare)
 
-  metrics/                  ← 70 registered metrics (21 core + 47 expansion + 2 Tier 3 scaffolds)
+  metrics/                  ← 74 registered metrics (21 core + 4 rankers + 47 expansion + 2 Tier 3 scaffolds)
   agents/                   ← Proposer → Critic → Judge agents
   orchestration/            ← DebateRound, OversightRunner, Celery tasks
 ```
