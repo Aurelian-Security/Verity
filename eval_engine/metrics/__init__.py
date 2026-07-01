@@ -16,8 +16,10 @@ IMPLEMENTED (Phase 1-3 + Tier 1):
 SCAFFOLD — Tier 2 (interface locked, implementation deferred):
     consistency, constitutional_eval, model_written_eval, source_reliability
 
-SCAFFOLD — Tier 3 (interface locked, frontier research):
-    goal_misgeneralization, deceptive_alignment
+# SCAFFOLD — Tier 3 (interface locked, frontier research):
+#     goal_misgeneralization, deceptive_alignment
+# IMPLEMENTED — Tier 3:
+#     latent_susceptibility
 """
 from __future__ import annotations
 import importlib, logging
@@ -47,6 +49,7 @@ from eval_engine.metrics.source_reliability import SourceReliabilityMetric
 # Tier 3 scaffolds
 from eval_engine.metrics.goal_misgeneralization import GoalMisgeneralizationMetric
 from eval_engine.metrics.deceptive_alignment import DeceptiveAlignmentMetric
+from eval_engine.metrics.latent_susceptibility import LatentSusceptibilityMetric
 
 if TYPE_CHECKING:
     from eval_engine.config import MetricConfig
@@ -84,6 +87,7 @@ _BUILTIN_REGISTRY: dict[str, type[BaseMetric]] = {
     # --- TIER 3 SCAFFOLDS ---
     "goal_misgeneralization":       GoalMisgeneralizationMetric,
     "deceptive_alignment":          DeceptiveAlignmentMetric,
+    "latent_susceptibility":        LatentSusceptibilityMetric,
 }
 
 # Merge 47-algorithm expansion registry (algorithms 1-47; 48-50 excluded intentionally)
@@ -144,4 +148,5 @@ __all__ = [
     "ModelWrittenEvalMetric", "SourceReliabilityMetric",
     "GoalMisgeneralizationMetric", "DeceptiveAlignmentMetric",
     "MetricsRegistry", "registry", "bm25", "rrf", "mmr", "ltr_heuristic",
+    "LatentSusceptibilityMetric",
 ]

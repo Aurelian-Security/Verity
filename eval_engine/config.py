@@ -68,6 +68,7 @@ class TestName(str, Enum):
     SYCOPHANCY_DETECTION_SUITE = "sycophancy_detection_suite"
     SPECIFICATION_GAMING_DETECTION = "specification_gaming_detection"
     DECEPTIVE_ALIGNMENT_BEHAVIORAL_TESTING = "deceptive_alignment_behavioral_testing"
+    LATENT_SUSCEPTIBILITY = "latent_susceptibility"
     TRUTHFULNESS_CALIBRATION = "truthfulness_calibration"
     ALIGNMENT_TAX_MEASUREMENT = "alignment_tax_measurement"
     POISONED_RAG_DETECTION = "poisoned_rag_detection"
