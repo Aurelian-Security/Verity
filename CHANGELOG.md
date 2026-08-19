@@ -10,6 +10,7 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 - **README.md / STATUS.md test-count claims** — badge and STATUS.md table stated "253 tests, 253/253 passing," stale since before the 47-algorithm merge (v0.5.0). Corrected to reflect the current suite (308 tests, 299 passing, 9 known pre-existing failures tracked separately — see STATUS.md).
 - **9 pre-existing test failures quarantined** — marked `@pytest.mark.xfail(strict=False)` with ticket-referencing reason strings, so CI failures on future PRs aren't masked by these known, unrelated issues. Failures span `test_latent_susceptibility.py` (2 tests — LatentIDS metric registration gap) and `test_oversight_runner.py` / `test_phase4.py` (5 tests — typer/click version incompatibility). Underlying bugs remain open; this is a CI-hygiene fix only, not a resolution.
 - **CONTRIBUTING.md broken test path** — instructed `pytest eval_engine/tests/unit/`, a directory that doesn't exist. Corrected to `pytest eval_engine/tests/`.
+- **CI never excluded `slow`-marked tests** — `.github/workflows/ci.yml` filtered `-m "not live"` only, so `test_real_model_integration` (GPU/probe-dependent, marked `slow` not `live`) would fail on every CI run. Updated filter to `-m "not live and not slow"`.
 - **Removed `Verity_merged/`** — a full duplicate of the repo (80 files) accidentally committed from the local merge workspace via `git add -A`. No functional code depended on it; removal is a pure cleanup.
 
 
