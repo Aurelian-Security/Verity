@@ -217,7 +217,9 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry.
 
 | Item | Status | Notes |
 |---|---|---|
-| `pytest` test suite (253 tests) | ✅ Passing | Unit + integration; 253/253 green |
+| `pytest` test suite (308 tests) | ⚠️ 299/308 passing | 9 known failures tracked separately — see below |
+
+> 9 pre-existing failures: 2 in `test_latent_susceptibility.py` (LatentIDS metric registration gap) and 5 in `test_oversight_runner.py`/`test_phase4.py` (typer/click version incompatibility). Both tracked in the Verity engineering backlog (Notion).
 | `ruff` linting | ✅ Passing | |
 | `mypy` type checking | ⚠️ Non-blocking | Known union-attr issues with Anthropic SDK types |
 

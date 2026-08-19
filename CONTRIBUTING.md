@@ -17,7 +17,7 @@ cp .env.example .env   # Add ANTHROPIC_API_KEY if running live tests
 
 Verify setup:
 ```bash
-pytest eval_engine/tests/unit/
+pytest eval_engine/tests/
 ruff check eval_engine/
 mypy eval_engine/
 ```

@@ -6,7 +6,7 @@ Verity provides a reproducible evaluation harness for RAG architectures — CLI-
 
 > *Trust, measured.*
 
-[![Tests](https://img.shields.io/badge/tests-253%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-299%2F308%20passing-yellow)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![Version](https://img.shields.io/badge/version-0.5.0-blue)]()
