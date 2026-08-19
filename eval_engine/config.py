@@ -104,6 +104,18 @@ class TestName(str, Enum):
     ADVERSARIAL_HYPERPARAMETER_SEARCH = "adversarial_hyperparameter_search"
 
 
+def metric_name_value(name: "TestName | str") -> str:
+    """Return the underlying string for a MetricConfig.name.
+
+    MetricConfig.name is TestName | str (see MetricConfig docstring): known
+    metrics validate to a real TestName enum member, staged/registry-only
+    metrics pass through as plain strings. TestName members already are
+    strings (str, Enum) with a `.value` attribute; plain strings aren't.
+    Use this instead of `m.name.value` anywhere that needs to handle both.
+    """
+    return name.value if isinstance(name, TestName) else str(name)
+
+
 class StatisticalTest(str, Enum):
     WILCOXON = "wilcoxon"          # Pre-registered significance test
     COHENS_D = "cohens_d"          # Effect size — pre-registered
@@ -150,8 +162,21 @@ class StatisticsConfig(BaseModel):
 
 
 class MetricConfig(BaseModel):
-    """Config for a single metric plugin."""
-    name: TestName
+    """Config for a single metric plugin.
+
+    `name` accepts either a known TestName enum member (strict, typo-safe)
+    or a plain string for metrics registered directly into
+    eval_engine.metrics._BUILTIN_REGISTRY but not yet promoted to a
+    TestName entry (e.g. the gap-closure conformance-pass metrics staged
+    via direct registry merge rather than plugin_path/TestName). Pydantic's
+    smart-union validation tries TestName first, so any name matching a
+    known enum value still becomes a real TestName instance -- this only
+    changes behavior for names outside the enum, which previously failed
+    validation outright. Use metric_name_value() (below) rather than
+    `.name.value` directly when reading this field back, since a plain-str
+    fallback has no `.value` attribute.
+    """
+    name: TestName | str
     enabled: bool = True
     kwargs: dict[str, Any] = Field(default_factory=dict)
 

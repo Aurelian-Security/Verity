@@ -47,3 +47,6 @@ include = ["eval_engine*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["eval_engine/tests"]
+markers = [
+    "slow: marks tests that require GPU and trained probe files (deselect with '-m not slow')",
+]

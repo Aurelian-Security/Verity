@@ -90,6 +90,26 @@ _BUILTIN_REGISTRY: dict[str, type[BaseMetric]] = {
 from eval_engine.metrics.algorithm_expansion import ALGORITHM_EXPANSION_REGISTRY
 _BUILTIN_REGISTRY.update(ALGORITHM_EXPANSION_REGISTRY)
 
+# Merge gap-closure conformance pass registries (verity_gap_closure +
+# verity_gap_algorithms staging packages, ~43 algorithms total). Not routed
+# through TestName/plugin_path (see gap_algorithms_expansion.py module
+# docstring for why) -- registered directly here, same pattern as the
+# 47-algorithm merge above. Collision-checked at import time below.
+from eval_engine.metrics.gap_closure_expansion import GAP_CLOSURE_EXPANSION_REGISTRY
+from eval_engine.metrics.gap_algorithms_expansion import GAP_ALGORITHMS_EXPANSION_REGISTRY
+
+_gap_collisions = (
+    (set(GAP_CLOSURE_EXPANSION_REGISTRY) | set(GAP_ALGORITHMS_EXPANSION_REGISTRY))
+    & set(_BUILTIN_REGISTRY)
+)
+if _gap_collisions:
+    raise RuntimeError(
+        f"gap-closure metric name(s) collide with existing _BUILTIN_REGISTRY entries: "
+        f"{sorted(_gap_collisions)}"
+    )
+_BUILTIN_REGISTRY.update(GAP_CLOSURE_EXPANSION_REGISTRY)
+_BUILTIN_REGISTRY.update(GAP_ALGORITHMS_EXPANSION_REGISTRY)
+
 class MetricsRegistry:
     def __init__(self) -> None:
         self._registry: dict[str, type[BaseMetric]] = dict(_BUILTIN_REGISTRY)
@@ -105,15 +125,26 @@ class MetricsRegistry:
         return self._registry[name](**kwargs)
 
     def from_config(self, metric_cfg: "MetricConfig") -> BaseMetric:
+        from eval_engine.config import metric_name_value
+        name_value = metric_name_value(metric_cfg.name)
         kwargs = dict(metric_cfg.kwargs)
-        if metric_cfg.name.value in ("ndcg", "recall_at_k"):
+        if name_value in ("ndcg", "recall_at_k"):
             kwargs.setdefault("k", metric_cfg.k)
         plugin_path = kwargs.pop("plugin_path", None)
         if plugin_path:
             module_path, class_name = plugin_path.rsplit(":", 1)
             cls = getattr(importlib.import_module(module_path), class_name)
-            self.register(cls.name, cls)
-        return self.get(metric_cfg.name.value, **kwargs)
+            # BUG FIX: `cls.name` accessed on the class object (not an
+            # instance) returns the raw `property` descriptor, not the
+            # metric's string identifier, since `name` is declared as an
+            # instance @property on BaseMetric. That silently registered
+            # plugins under a `<property object>` dict key instead of their
+            # real name. Reading `metric_name` (the HeuristicMetric class
+            # attribute the property wraps) fixes this for the common case;
+            # falls back to instantiating for a bare BaseMetric subclass.
+            registered_name = getattr(cls, "metric_name", None) or cls().name
+            self.register(registered_name, cls)
+        return self.get(name_value, **kwargs)
 
     def scaffolds(self) -> list[str]:
         """Return names of scaffold metrics not yet implemented."""

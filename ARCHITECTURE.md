@@ -90,7 +90,7 @@ The three architectural invariants that everything else flows from:
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  METRIC ENGINE  (eval_engine/metrics/)                                  │
-│  • 74 registered metrics (21 core + 4 rankers + 47 expansion + 2 Tier 3 scaffolds)  │
+│  • 117 registered metrics (21 core + 4 rankers + 47 expansion + 43 gap-closure + 2 Tier 3 scaffolds)  │
 │  • BaseMetric ABC enforces .score() interface via Pydantic MetricResult │
 │  • Metrics read from JSONL — never call agents or mutate state          │
 │  • registry.register() supports runtime plugin injection                │
@@ -153,7 +153,7 @@ Verity/
 │   ├── comparison.py           ← compare_run_manifests(): run diff engine
 │   │
 │   ├── metrics/
-│   │   ├── __init__.py         ← MetricsRegistry: 74 registered metrics
+│   │   ├── __init__.py         ← MetricsRegistry: 117 registered metrics
 │   │   ├── base.py             ← BaseMetric ABC + MetricResult dataclass
 │   │   ├── retrieval_metrics.py     ← Recall@K, MRR, NDCG@K
 │   │   ├── retrieval_rankers.py     ← BM25, RRF, MMR, LTR heuristic (v0.5.1)
@@ -177,7 +177,11 @@ Verity/
 │   │   ├── source_reliability.py    ← [Scaffold Tier 2]
 │   │   ├── goal_misgeneralization.py ← [Scaffold Tier 3]
 │   │   ├── deceptive_alignment.py   ← [Scaffold Tier 3]
-│   │   └── algorithm_expansion.py   ← 47-algorithm expansion registry (v0.5.0)
+│   │   ├── algorithm_expansion.py   ← 47-algorithm expansion registry (v0.5.0)
+│   │   ├── gap_closure_expansion.py    ← 35-metric gap-closure conformance pass (corrigibility, goal misgen, alignment faking, sandbagging, oversight, OWASP)
+│   │   ├── gap_algorithms_expansion.py ← 8-metric gap-closure conformance pass (judge consensus, jailbreak scoring, TTE, calibration, regression diff, manifest hash, probe robustness ×2)
+│   │   ├── _gap_algorithms_core.py     ← Vendored pure-function core (item 1 source, unchanged)
+│   │   └── _probe_robustness_core.py   ← Vendored shared AUROC core for the two probe-robustness metrics
 │   │
 │   ├── agents/
 │   │   ├── agent_base.py       ← Shared base: real/dry-run dispatch, trace logging
@@ -198,6 +202,8 @@ Verity/
 │       ├── test_oversight_runner.py    ← OversightRunner, OversightRunResult, CLI (21)
 │       ├── test_tier1_metrics.py       ← Calibration, hallucination, trust, persistence (37)
 │       ├── test_scaffolds.py           ← Scaffold registry and interface contracts (50)
+│       ├── test_gap_closure_expansion.py    ← Gap-closure 35-metric registry, shape + behavioral tests (12)
+│       ├── test_gap_algorithms_expansion.py ← Gap-closure 8-metric registry, shape + behavioral + coexistence regression tests (11)
 │       └── test_phase4.py              ← Reproducibility, dataset manifest, comparison (33)
 │
 ├── configs/

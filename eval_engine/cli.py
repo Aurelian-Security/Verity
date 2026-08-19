@@ -38,6 +38,7 @@ from eval_engine.config import (
     StatisticsConfig,
     SupportedModel,
     TestName,
+    metric_name_value,
 )
 from eval_engine.metrics import registry
 
@@ -134,10 +135,20 @@ def run_eval(
         for m in metrics.split(","):
             m = m.strip()
             try:
-                metric_list.append(MetricConfig(name=TestName(m)))
+                resolved_name: TestName | str = TestName(m)
             except ValueError:
-                rprint(f"[bold red]Unknown metric:[/bold red] '{m}'. Run 'verity list-metrics' to see available.")
-                raise typer.Exit(code=1)
+                # Not a TestName enum member -- fall back to checking the
+                # live registry, which also covers metrics merged directly
+                # into _BUILTIN_REGISTRY without a TestName entry yet (e.g.
+                # the gap-closure conformance-pass metrics). This is a
+                # stronger check than the enum alone, not a weaker one --
+                # anything in neither place is still a real typo.
+                if m in registry.available:
+                    resolved_name = m
+                else:
+                    rprint(f"[bold red]Unknown metric:[/bold red] '{m}'. Run 'verity list-metrics' to see available.")
+                    raise typer.Exit(code=1)
+            metric_list.append(MetricConfig(name=resolved_name))
 
         try:
             arch = RAGArchitecture(architecture)
@@ -169,7 +180,7 @@ def run_eval(
     table.add_row("Architecture", eval_config.architecture.value)
     table.add_row("Model", str(eval_config.model))
     table.add_row("Dataset", str(eval_config.dataset.path))
-    table.add_row("Metrics", ", ".join(m.name.value for m in eval_config.enabled_metrics))
+    table.add_row("Metrics", ", ".join(metric_name_value(m.name) for m in eval_config.enabled_metrics))
     table.add_row("Budget", f"${eval_config.budget.max_usd:.2f}")
     table.add_row("Seed", str(eval_config.seed))
     table.add_row("Track", str(eval_config.track))
@@ -202,9 +213,10 @@ def run_eval(
     results_table.add_column("Records", style="white")
 
     for m in eval_config.enabled_metrics:
-        mean = result.mean_score(m.name.value)
+        name_value = metric_name_value(m.name)
+        mean = result.mean_score(name_value)
         score_str = f"{mean:.4f}" if mean is not None else "N/A"
-        results_table.add_row(m.name.value, score_str, str(len(result.records)))
+        results_table.add_row(name_value, score_str, str(len(result.records)))
 
     console.print(results_table)
     rprint(f"\n[bold green]Results saved to:[/bold green] {eval_config.output_dir / eval_config.experiment_id}/")
@@ -476,7 +488,7 @@ def validate_config(
         rprint(f"  Experiment ID:  {cfg.experiment_id}")
         rprint(f"  Architecture:   {cfg.architecture.value}")
         rprint(f"  Model:          {cfg.model}")
-        rprint(f"  Metrics:        {[m.name.value for m in cfg.enabled_metrics]}")
+        rprint(f"  Metrics:        {[metric_name_value(m.name) for m in cfg.enabled_metrics]}")
         rprint(f"  Budget:         ${cfg.budget.max_usd:.2f}")
     except Exception as e:
         rprint(f"[bold red]✗ Config invalid:[/bold red] {e}")

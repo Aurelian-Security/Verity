@@ -1,0 +1,362 @@
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index 906a9df..04d4e02 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -90,7 +90,7 @@ The three architectural invariants that everything else flows from:
+                                  ▼
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │  METRIC ENGINE  (eval_engine/metrics/)                                  │
+-│  • 74 registered metrics (21 core + 4 rankers + 47 expansion + 2 Tier 3 scaffolds)  │
++│  • 117 registered metrics (21 core + 4 rankers + 47 expansion + 43 gap-closure + 2 Tier 3 scaffolds)  │
+ │  • BaseMetric ABC enforces .score() interface via Pydantic MetricResult │
+ │  • Metrics read from JSONL — never call agents or mutate state          │
+ │  • registry.register() supports runtime plugin injection                │
+@@ -153,7 +153,7 @@ Verity/
+ │   ├── comparison.py           ← compare_run_manifests(): run diff engine
+ │   │
+ │   ├── metrics/
+-│   │   ├── __init__.py         ← MetricsRegistry: 74 registered metrics
++│   │   ├── __init__.py         ← MetricsRegistry: 117 registered metrics
+ │   │   ├── base.py             ← BaseMetric ABC + MetricResult dataclass
+ │   │   ├── retrieval_metrics.py     ← Recall@K, MRR, NDCG@K
+ │   │   ├── retrieval_rankers.py     ← BM25, RRF, MMR, LTR heuristic (v0.5.1)
+@@ -177,7 +177,11 @@ Verity/
+ │   │   ├── source_reliability.py    ← [Scaffold Tier 2]
+ │   │   ├── goal_misgeneralization.py ← [Scaffold Tier 3]
+ │   │   ├── deceptive_alignment.py   ← [Scaffold Tier 3]
+-│   │   └── algorithm_expansion.py   ← 47-algorithm expansion registry (v0.5.0)
++│   │   ├── algorithm_expansion.py   ← 47-algorithm expansion registry (v0.5.0)
++│   │   ├── gap_closure_expansion.py    ← 35-metric gap-closure conformance pass (corrigibility, goal misgen, alignment faking, sandbagging, oversight, OWASP)
++│   │   ├── gap_algorithms_expansion.py ← 8-metric gap-closure conformance pass (judge consensus, jailbreak scoring, TTE, calibration, regression diff, manifest hash, probe robustness ×2)
++│   │   ├── _gap_algorithms_core.py     ← Vendored pure-function core (item 1 source, unchanged)
++│   │   └── _probe_robustness_core.py   ← Vendored shared AUROC core for the two probe-robustness metrics
+ │   │
+ │   ├── agents/
+ │   │   ├── agent_base.py       ← Shared base: real/dry-run dispatch, trace logging
+@@ -198,6 +202,8 @@ Verity/
+ │       ├── test_oversight_runner.py    ← OversightRunner, OversightRunResult, CLI (21)
+ │       ├── test_tier1_metrics.py       ← Calibration, hallucination, trust, persistence (37)
+ │       ├── test_scaffolds.py           ← Scaffold registry and interface contracts (50)
++│       ├── test_gap_closure_expansion.py    ← Gap-closure 35-metric registry, shape + behavioral tests (12)
++│       ├── test_gap_algorithms_expansion.py ← Gap-closure 8-metric registry, shape + behavioral + coexistence regression tests (11)
+ │       └── test_phase4.py              ← Reproducibility, dataset manifest, comparison (33)
+ │
+ ├── configs/
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 98e2bd9..d89ad65 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -16,6 +16,28 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
+ - Tier 3 metric implementations (prerequisites: Papers 1–2 published, OOD test set, LatentIDS validated)
+ - GUI analytics layer (Phase 5 — after empirical results exist)
+ 
++### Added
++- **`gap_closure_expansion.py`** — 35-metric conformance-pass registry from the `verity_gap_closure` staging package (corrigibility, goal misgeneralization/specification gaming, alignment faking, sandbagging, scalable oversight, LatentIDS layer-depth transfer, OWASP/agent/application security). Rebuilt as real `HeuristicMetric` subclasses against the live `BaseMetric` interface — the staging package's original code was written against a reconstructed interface, not the real one.
++- **`gap_algorithms_expansion.py`** — 8-metric conformance-pass registry: 6 from the `verity_gap_algorithms` staging package (`reliability_weighted_judge_consensus`, `scenario_adaptive_jailbreak_scoring`, `turns_to_exploit`, `trust_calibration_metrics`, `cross_category_regression_diff`, `canonical_manifest_hash_verification`), plus `probe_distribution_shift_robustness` and `cross_architecture_probe_validation` — the latter two routed through a shared AUROC core (`_probe_robustness_core.py`) instead of each reimplementing rank-based AUROC independently, superseding the pre-refactor `cross_architecture_probe_validation` that originally lived in `verity_gap_closure`'s own metrics module.
++- **`_gap_algorithms_core.py`**, **`_probe_robustness_core.py`** — vendored pure-function cores, unmodified from the source staging packages' verified/tested implementations.
++- **`tests/test_gap_closure_expansion.py`** — 12 tests: registry count (35), MetricResult shape for all metrics, 8 behavioral assertions translated 1:1 from the staging package's original test suite, plus a JSON-serialization guard for the `resource_amplification` inf-value fix.
++- **`tests/test_gap_algorithms_expansion.py`** — 11 tests: registry count (8), MetricResult shape for all metrics, 7 behavioral assertions translated 1:1 from the staging package's original 6-test suite plus manifest-hash determinism/mismatch checks, and 2 coexistence-refactor regression tests confirming the shared AUROC core reproduces both original standalone implementations' exact output.
++
++### Fixed
++- **`MetricsRegistry.from_config()` plugin_path registration bug** — `self.register(cls.name, cls)` accessed `name` on the class object rather than an instance; since `name` is an instance `@property` on `BaseMetric`, this registered every plugin under a `<property object>` dict key instead of its real string name. Fixed to read `cls.metric_name` (the `HeuristicMetric` class attribute the property wraps), falling back to instantiate-then-read for a bare `BaseMetric` subclass.
++- **`MetricConfig.name: TestName` strict-enum bug** — this prevented `MetricConfig` from ever being constructed with a name outside the `TestName` enum, which made the `plugin_path` escape hatch unusable for introducing genuinely new metric names through config (it could only re-register an existing `TestName`, and even that path was broken by the bug above). Loosened to `TestName | str`.
++
++### Changed
++- `metrics/__init__.py` — both new registries merged into `_BUILTIN_REGISTRY` via `.update()`, same pattern as the 47-algorithm merge, with a collision guard that raises at import time if any new name overlaps an existing one. Total registry: 117 metrics.
++- `config.py` — `MetricConfig.name` type changed from `TestName` to `TestName | str`; new `metric_name_value()` helper added since `.value` doesn't exist on a plain `str` and Pydantic's smart-union validation resolves *every* `MetricConfig.name` to plain `str` now, not just names outside the enum.
++- `cli.py` — `--metrics` parsing no longer rejects names outside `TestName` outright; falls back to checking `registry.available` (a stronger typo check than the enum alone, since it validates against the live registry). Four `m.name.value` display/lookup sites switched to `metric_name_value()`.
++- `runner.py` — one `m.name.value` site switched to `metric_name_value()`.
++
++### Notes
++- No `TestName` enum entries were added for the 43 gap-closure metrics — they're reachable via `registry.get(name)` and, after the `MetricConfig.name` fix, via `MetricConfig`/`verity run --metrics` as plain strings. Promoting them to real enum members is a separate decision.
++- Two existing `EvalConfig` validators (`ragas_consolidation_delta` snapshot requirement, `session_level`/`longitudinal` out-of-scope check) needed no code change despite the `MetricConfig.name` type change — `TestName` subclasses `str`, so equality/membership checks against a plain-string `m.name` still work. Re-verified with real `EvalConfig` construction, not just by inspection.
++- `trust_calibration_metrics` is named distinctly from the existing `calibration` `TestName` (RAGAS-answer-confidence calibration) to avoid a registry collision — same general idea (confidence-vs-outcome), different contract. Worth a naming/consolidation pass before any future `TestName` promotion.
++
+ ---
+ 
+ ## [0.5.1] — 2026-06
+diff --git a/README.md b/README.md
+index 3b0305c..1d9da42 100644
+--- a/README.md
++++ b/README.md
+@@ -308,7 +308,7 @@ registry.register("my_metric", MyCustomMetric)
+ 
+ ## Metric Registry
+ 
+-Verity's registry contains **74 registered metrics** across four groups.
++Verity's registry contains **117 registered metrics** across five groups.
+ 
+ ### Core — Implemented (21)
+ 
+@@ -371,7 +371,29 @@ metrics:
+ 
+ **Security (15):** `owasp_llm_top_10_compliance_audit`, `mitre_atlas_threat_mapping`, `indirect_prompt_injection_web_content`, `differential_privacy_compliance_testing`, `adversarial_retrieval_ranking_manipulation`, `embedding_inversion_attack_testing`, `supply_chain_integrity_verification`, `adversarial_document_chunking_attacks`, `cross_encoder_reranking_robustness`, `api_rate_limiting_abuse_detection`, `model_extraction_attack_resistance`, `cryptographic_audit_log_integrity`, `semantic_similarity_label_leakage_detection`, `red_team_coverage_matrix`, `adversarial_hyperparameter_search`
+ 
+-### Scaffolded — Tier 3 (frontier research, 2)
++### Gap-Closure Conformance Pass — 43 metrics (`gap_closure_expansion.py`, `gap_algorithms_expansion.py`)
++
++43 additional metrics from two staging packages (`verity_gap_closure`, `verity_gap_algorithms`), rebuilt as real `HeuristicMetric` subclasses against the live `BaseMetric` interface. All heuristic (no scaffolds in this batch) and all registered in `MetricsRegistry`.
++
++**Corrigibility (4):** `shutdown_compliance_rate`, `correction_acceptance_rate`, `intervention_cost`, `corrigibility_robustness`
++
++**Goal misgeneralization / specification gaming (4):** `goal_generalization_gap`, `proxy_preference_rate`, `specification_gaming_severity`, `counterfactual_goal_consistency`
++
++**Alignment faking (4):** `evaluation_condition_behavior_gap`, `strategic_compliance_rate`, `condition_leakage_adjusted_gap`, `alignment_faking_persistence`
++
++**Sandbagging (5):** `targeted_underperformance_gap`, `selective_sandbagging_index`, `noise_induced_capability_uplift`, `answer_distribution_anomaly`, `item_response_inconsistency`
++
++**Scalable oversight (4):** `performance_gap_recovered`, `oversight_uplift`, `error_discovery_recall`, `false_approval_rate`
++
++**LatentIDS cross-architecture / probe robustness (3):** `layer_normalized_transfer`, `probe_distribution_shift_robustness`, `cross_architecture_probe_validation` — the latter two share a single AUROC core (`_probe_robustness_core.py`) rather than each reimplementing rank-based AUROC independently.
++
++**OWASP / agent / application security (13):** `secure_utility`, `unauthorized_tool_call_rate`, `data_exfiltration_rate`, `payload_propagation_rate`, `sanitizer_bypass_rate`, `retrieval_poison_dominance`, `provenance_completeness`, `secret_recovery_rate`, `excessive_agency_risk`, `verification_invocation_rate`, `resource_amplification`, `prompt_leakage_score`, `retrieval_isolation_score`
++
++**Judging / provenance infrastructure (6):** `reliability_weighted_judge_consensus`, `scenario_adaptive_jailbreak_scoring`, `turns_to_exploit`, `trust_calibration_metrics`, `cross_category_regression_diff`, `canonical_manifest_hash_verification`
++
++Every metric in this batch operates on structured episode/trial/judge-vote/probe-score/manifest data passed via `**kwargs` rather than on RAG `(question, contexts, answer, ground_truth)` content — `question`/`answer` are still required by `validate_inputs()` but are placeholders, not the real signal. None of these 43 have `TestName` enum entries yet; they're reachable via `registry.get(name)` directly and, since `MetricConfig.name` accepts `TestName | str`, via `MetricConfig`/`verity run --metrics` as well.
++
++
+ 
+ | Metric | Research Question |
+ |--------|------------------|
+@@ -595,7 +617,7 @@ eval_engine/
+   dataset_manifest.py       ← SHA-256 content hashing + lineage tracking
+   comparison.py             ← Run diff engine (verity compare)
+ 
+-  metrics/                  ← 74 registered metrics (21 core + 4 rankers + 47 expansion + 2 Tier 3 scaffolds)
++  metrics/                  ← 117 registered metrics (21 core + 4 rankers + 47 expansion + 43 gap-closure + 2 Tier 3 scaffolds)
+   agents/                   ← Proposer → Critic → Judge agents
+   orchestration/            ← DebateRound, OversightRunner, Celery tasks
+ ```
+diff --git a/STATUS.md b/STATUS.md
+index a3e6d64..bd5fcf3 100644
+--- a/STATUS.md
++++ b/STATUS.md
+@@ -86,6 +86,27 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
+ 
+ Heuristic implementations are deterministic, dependency-free, and fully tested. Scaffold implementations follow the standard scaffold contract (`status: "scaffold"`, zero score) and require external models, GPU, or white-box access. **Algorithms 48–50 are not included in this release.**
+ 
++#### Gap-Closure Conformance Pass — 43 metrics
++
++43 additional metrics from two staging packages (`verity_gap_closure`, `verity_gap_algorithms`), rebuilt against the live `BaseMetric`/`HeuristicMetric` interface (not the reconstructed interface the staging packages were originally built against). All heuristic — no scaffolds in this batch. Registered directly into `_BUILTIN_REGISTRY` (not yet promoted to `TestName` enum entries, though `MetricConfig.name: TestName | str` means they're reachable via `MetricConfig`/CLI as plain strings already).
++
++| Domain | Count | Status |
++|--------|-------|--------|
++| Corrigibility | 4 | 4 heuristic |
++| Goal misgeneralization / spec gaming | 4 | 4 heuristic |
++| Alignment faking | 4 | 4 heuristic |
++| Sandbagging | 5 | 5 heuristic |
++| Scalable oversight | 4 | 4 heuristic |
++| LatentIDS cross-architecture / probe robustness | 3 | 3 heuristic |
++| OWASP / agent / application security | 13 | 13 heuristic |
++| Judging / provenance infrastructure | 6 | 6 heuristic |
++| **Total** | **43** | **43 heuristic, 0 scaffold** |
++
++`probe_distribution_shift_robustness` and `cross_architecture_probe_validation` share a single rank-based AUROC core (`_probe_robustness_core.py`) rather than each reimplementing the same math — a coexistence refactor verified against both metrics' original independent implementations via regression tests.
++
++Input shape note: unlike most of the 47-algorithm expansion registry, this batch operates almost entirely on structured episode/trial/judge-vote/probe-score/manifest data passed via `**kwargs`, not on RAG `(question, contexts, answer, ground_truth)` content. See `gap_closure_expansion.py`/`gap_algorithms_expansion.py` module docstrings.
++
++
+ #### Scaffolded — Tier 3 (2 metrics, frontier research prerequisites)
+ 
+ These metrics have `BaseMetric`-compliant interfaces registered in the registry. Their `.score()` methods return placeholder `MetricResult` objects with `status: "scaffold"` in metadata.
+diff --git a/eval_engine/cli.py b/eval_engine/cli.py
+index 5d8d796..5d49049 100644
+--- a/eval_engine/cli.py
++++ b/eval_engine/cli.py
+@@ -38,6 +38,7 @@ from eval_engine.config import (
+     StatisticsConfig,
+     SupportedModel,
+     TestName,
++    metric_name_value,
+ )
+ from eval_engine.metrics import registry
+ 
+@@ -134,10 +135,20 @@ def run_eval(
+         for m in metrics.split(","):
+             m = m.strip()
+             try:
+-                metric_list.append(MetricConfig(name=TestName(m)))
++                resolved_name: TestName | str = TestName(m)
+             except ValueError:
+-                rprint(f"[bold red]Unknown metric:[/bold red] '{m}'. Run 'verity list-metrics' to see available.")
+-                raise typer.Exit(code=1)
++                # Not a TestName enum member -- fall back to checking the
++                # live registry, which also covers metrics merged directly
++                # into _BUILTIN_REGISTRY without a TestName entry yet (e.g.
++                # the gap-closure conformance-pass metrics). This is a
++                # stronger check than the enum alone, not a weaker one --
++                # anything in neither place is still a real typo.
++                if m in registry.available:
++                    resolved_name = m
++                else:
++                    rprint(f"[bold red]Unknown metric:[/bold red] '{m}'. Run 'verity list-metrics' to see available.")
++                    raise typer.Exit(code=1)
++            metric_list.append(MetricConfig(name=resolved_name))
+ 
+         try:
+             arch = RAGArchitecture(architecture)
+@@ -169,7 +180,7 @@ def run_eval(
+     table.add_row("Architecture", eval_config.architecture.value)
+     table.add_row("Model", str(eval_config.model))
+     table.add_row("Dataset", str(eval_config.dataset.path))
+-    table.add_row("Metrics", ", ".join(m.name.value for m in eval_config.enabled_metrics))
++    table.add_row("Metrics", ", ".join(metric_name_value(m.name) for m in eval_config.enabled_metrics))
+     table.add_row("Budget", f"${eval_config.budget.max_usd:.2f}")
+     table.add_row("Seed", str(eval_config.seed))
+     table.add_row("Track", str(eval_config.track))
+@@ -202,9 +213,10 @@ def run_eval(
+     results_table.add_column("Records", style="white")
+ 
+     for m in eval_config.enabled_metrics:
+-        mean = result.mean_score(m.name.value)
++        name_value = metric_name_value(m.name)
++        mean = result.mean_score(name_value)
+         score_str = f"{mean:.4f}" if mean is not None else "N/A"
+-        results_table.add_row(m.name.value, score_str, str(len(result.records)))
++        results_table.add_row(name_value, score_str, str(len(result.records)))
+ 
+     console.print(results_table)
+     rprint(f"\n[bold green]Results saved to:[/bold green] {eval_config.output_dir / eval_config.experiment_id}/")
+@@ -476,7 +488,7 @@ def validate_config(
+         rprint(f"  Experiment ID:  {cfg.experiment_id}")
+         rprint(f"  Architecture:   {cfg.architecture.value}")
+         rprint(f"  Model:          {cfg.model}")
+-        rprint(f"  Metrics:        {[m.name.value for m in cfg.enabled_metrics]}")
++        rprint(f"  Metrics:        {[metric_name_value(m.name) for m in cfg.enabled_metrics]}")
+         rprint(f"  Budget:         ${cfg.budget.max_usd:.2f}")
+     except Exception as e:
+         rprint(f"[bold red]✗ Config invalid:[/bold red] {e}")
+diff --git a/eval_engine/config.py b/eval_engine/config.py
+index 1a073f5..66ede6c 100644
+--- a/eval_engine/config.py
++++ b/eval_engine/config.py
+@@ -104,6 +104,18 @@ class TestName(str, Enum):
+     ADVERSARIAL_HYPERPARAMETER_SEARCH = "adversarial_hyperparameter_search"
+ 
+ 
++def metric_name_value(name: "TestName | str") -> str:
++    """Return the underlying string for a MetricConfig.name.
++
++    MetricConfig.name is TestName | str (see MetricConfig docstring): known
++    metrics validate to a real TestName enum member, staged/registry-only
++    metrics pass through as plain strings. TestName members already are
++    strings (str, Enum) with a `.value` attribute; plain strings aren't.
++    Use this instead of `m.name.value` anywhere that needs to handle both.
++    """
++    return name.value if isinstance(name, TestName) else str(name)
++
++
+ class StatisticalTest(str, Enum):
+     WILCOXON = "wilcoxon"          # Pre-registered significance test
+     COHENS_D = "cohens_d"          # Effect size — pre-registered
+@@ -150,8 +162,21 @@ class StatisticsConfig(BaseModel):
+ 
+ 
+ class MetricConfig(BaseModel):
+-    """Config for a single metric plugin."""
+-    name: TestName
++    """Config for a single metric plugin.
++
++    `name` accepts either a known TestName enum member (strict, typo-safe)
++    or a plain string for metrics registered directly into
++    eval_engine.metrics._BUILTIN_REGISTRY but not yet promoted to a
++    TestName entry (e.g. the gap-closure conformance-pass metrics staged
++    via direct registry merge rather than plugin_path/TestName). Pydantic's
++    smart-union validation tries TestName first, so any name matching a
++    known enum value still becomes a real TestName instance -- this only
++    changes behavior for names outside the enum, which previously failed
++    validation outright. Use metric_name_value() (below) rather than
++    `.name.value` directly when reading this field back, since a plain-str
++    fallback has no `.value` attribute.
++    """
++    name: TestName | str
+     enabled: bool = True
+     kwargs: dict[str, Any] = Field(default_factory=dict)
+ 
+diff --git a/eval_engine/metrics/__init__.py b/eval_engine/metrics/__init__.py
+index 01e6158..38243bb 100644
+--- a/eval_engine/metrics/__init__.py
++++ b/eval_engine/metrics/__init__.py
+@@ -90,6 +90,26 @@ _BUILTIN_REGISTRY: dict[str, type[BaseMetric]] = {
+ from eval_engine.metrics.algorithm_expansion import ALGORITHM_EXPANSION_REGISTRY
+ _BUILTIN_REGISTRY.update(ALGORITHM_EXPANSION_REGISTRY)
+ 
++# Merge gap-closure conformance pass registries (verity_gap_closure +
++# verity_gap_algorithms staging packages, ~43 algorithms total). Not routed
++# through TestName/plugin_path (see gap_algorithms_expansion.py module
++# docstring for why) -- registered directly here, same pattern as the
++# 47-algorithm merge above. Collision-checked at import time below.
++from eval_engine.metrics.gap_closure_expansion import GAP_CLOSURE_EXPANSION_REGISTRY
++from eval_engine.metrics.gap_algorithms_expansion import GAP_ALGORITHMS_EXPANSION_REGISTRY
++
++_gap_collisions = (
++    (set(GAP_CLOSURE_EXPANSION_REGISTRY) | set(GAP_ALGORITHMS_EXPANSION_REGISTRY))
++    & set(_BUILTIN_REGISTRY)
++)
++if _gap_collisions:
++    raise RuntimeError(
++        f"gap-closure metric name(s) collide with existing _BUILTIN_REGISTRY entries: "
++        f"{sorted(_gap_collisions)}"
++    )
++_BUILTIN_REGISTRY.update(GAP_CLOSURE_EXPANSION_REGISTRY)
++_BUILTIN_REGISTRY.update(GAP_ALGORITHMS_EXPANSION_REGISTRY)
++
+ class MetricsRegistry:
+     def __init__(self) -> None:
+         self._registry: dict[str, type[BaseMetric]] = dict(_BUILTIN_REGISTRY)
+@@ -105,15 +125,26 @@ class MetricsRegistry:
+         return self._registry[name](**kwargs)
+ 
+     def from_config(self, metric_cfg: "MetricConfig") -> BaseMetric:
++        from eval_engine.config import metric_name_value
++        name_value = metric_name_value(metric_cfg.name)
+         kwargs = dict(metric_cfg.kwargs)
+-        if metric_cfg.name.value in ("ndcg", "recall_at_k"):
++        if name_value in ("ndcg", "recall_at_k"):
+             kwargs.setdefault("k", metric_cfg.k)
+         plugin_path = kwargs.pop("plugin_path", None)
+         if plugin_path:
+             module_path, class_name = plugin_path.rsplit(":", 1)
+             cls = getattr(importlib.import_module(module_path), class_name)
+-            self.register(cls.name, cls)
+-        return self.get(metric_cfg.name.value, **kwargs)
++            # BUG FIX: `cls.name` accessed on the class object (not an
++            # instance) returns the raw `property` descriptor, not the
++            # metric's string identifier, since `name` is declared as an
++            # instance @property on BaseMetric. That silently registered
++            # plugins under a `<property object>` dict key instead of their
++            # real name. Reading `metric_name` (the HeuristicMetric class
++            # attribute the property wraps) fixes this for the common case;
++            # falls back to instantiating for a bare BaseMetric subclass.
++            registered_name = getattr(cls, "metric_name", None) or cls().name
++            self.register(registered_name, cls)
++        return self.get(name_value, **kwargs)
+ 
+     def scaffolds(self) -> list[str]:
+         """Return names of scaffold metrics not yet implemented."""
+diff --git a/eval_engine/runner.py b/eval_engine/runner.py
+index 3dd6c43..93fde05 100644
+--- a/eval_engine/runner.py
++++ b/eval_engine/runner.py
+@@ -8,7 +8,7 @@ import asyncio, json, logging, time, uuid
+ from pathlib import Path
+ from typing import Any
+ 
+-from eval_engine.config import EvalConfig
++from eval_engine.config import EvalConfig, metric_name_value
+ from eval_engine.cost_tracker import BudgetExceededError, CostTracker
+ from eval_engine.metrics import MetricResult, MetricsRegistry, registry as default_registry
+ from eval_engine.sanitizer import InputSanitizer
+@@ -63,7 +63,10 @@ class RunResult:
+             "total_errors": len(self.errors),
+             "success_rate": round(self.success_rate, 4),
+             "sanitizer_detections": self.sanitizer_summary,
+-            "mean_scores": {m.name.value: self.mean_score(m.name.value) for m in self.config.enabled_metrics},
++            "mean_scores": {
++                metric_name_value(m.name): self.mean_score(metric_name_value(m.name))
++                for m in self.config.enabled_metrics
++            },
+         }
+ 
+ 

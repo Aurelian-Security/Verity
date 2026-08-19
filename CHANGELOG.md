@@ -6,6 +6,15 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 
 ## [Unreleased]
 
+### Fixed
+- **README.md / STATUS.md test-count claims** — badge and STATUS.md table stated "253 tests, 253/253 passing," stale since before the 47-algorithm merge (v0.5.0). Corrected to reflect the current suite (308 tests, 299 passing, 9 known pre-existing failures tracked separately — see STATUS.md).
+- **9 pre-existing test failures quarantined** — marked `@pytest.mark.xfail(strict=False)` with ticket-referencing reason strings, so CI failures on future PRs aren't masked by these known, unrelated issues. Failures span `test_latent_susceptibility.py` (2 tests — LatentIDS metric registration gap) and `test_oversight_runner.py` / `test_phase4.py` (5 tests — typer/click version incompatibility). Underlying bugs remain open; this is a CI-hygiene fix only, not a resolution.
+- **CONTRIBUTING.md broken test path** — instructed `pytest eval_engine/tests/unit/`, a directory that doesn't exist. Corrected to `pytest eval_engine/tests/`.
+- **CI never excluded `slow`-marked tests** — `.github/workflows/ci.yml` filtered `-m "not live"` only, so `test_real_model_integration` (GPU/probe-dependent, marked `slow` not `live`) would fail on every CI run. Updated filter to `-m "not live and not slow"`.
+- **Removed `Verity_merged/`** — a full duplicate of the repo (80 files) accidentally committed from the local merge workspace via `git add -A`. No functional code depended on it; removal is a pure cleanup.
+
+
+
 ### Planned
 - `--redact-contexts` flag to strip retrieved context text from JSONL outputs
 - Bootstrap confidence intervals in StatEngine
@@ -15,6 +24,28 @@ All notable changes to Verity are documented here. Follows [Keep a Changelog](ht
 - Example dataset in `datasets/` for zero-setup quick start
 - Tier 3 metric implementations (prerequisites: Papers 1–2 published, OOD test set, LatentIDS validated)
 - GUI analytics layer (Phase 5 — after empirical results exist)
+
+### Added
+- **`gap_closure_expansion.py`** — 35-metric conformance-pass registry from the `verity_gap_closure` staging package (corrigibility, goal misgeneralization/specification gaming, alignment faking, sandbagging, scalable oversight, LatentIDS layer-depth transfer, OWASP/agent/application security). Rebuilt as real `HeuristicMetric` subclasses against the live `BaseMetric` interface — the staging package's original code was written against a reconstructed interface, not the real one.
+- **`gap_algorithms_expansion.py`** — 8-metric conformance-pass registry: 6 from the `verity_gap_algorithms` staging package (`reliability_weighted_judge_consensus`, `scenario_adaptive_jailbreak_scoring`, `turns_to_exploit`, `trust_calibration_metrics`, `cross_category_regression_diff`, `canonical_manifest_hash_verification`), plus `probe_distribution_shift_robustness` and `cross_architecture_probe_validation` — the latter two routed through a shared AUROC core (`_probe_robustness_core.py`) instead of each reimplementing rank-based AUROC independently, superseding the pre-refactor `cross_architecture_probe_validation` that originally lived in `verity_gap_closure`'s own metrics module.
+- **`_gap_algorithms_core.py`**, **`_probe_robustness_core.py`** — vendored pure-function cores, unmodified from the source staging packages' verified/tested implementations.
+- **`tests/test_gap_closure_expansion.py`** — 12 tests: registry count (35), MetricResult shape for all metrics, 8 behavioral assertions translated 1:1 from the staging package's original test suite, plus a JSON-serialization guard for the `resource_amplification` inf-value fix.
+- **`tests/test_gap_algorithms_expansion.py`** — 11 tests: registry count (8), MetricResult shape for all metrics, 7 behavioral assertions translated 1:1 from the staging package's original 6-test suite plus manifest-hash determinism/mismatch checks, and 2 coexistence-refactor regression tests confirming the shared AUROC core reproduces both original standalone implementations' exact output.
+
+### Fixed
+- **`MetricsRegistry.from_config()` plugin_path registration bug** — `self.register(cls.name, cls)` accessed `name` on the class object rather than an instance; since `name` is an instance `@property` on `BaseMetric`, this registered every plugin under a `<property object>` dict key instead of its real string name. Fixed to read `cls.metric_name` (the `HeuristicMetric` class attribute the property wraps), falling back to instantiate-then-read for a bare `BaseMetric` subclass.
+- **`MetricConfig.name: TestName` strict-enum bug** — this prevented `MetricConfig` from ever being constructed with a name outside the `TestName` enum, which made the `plugin_path` escape hatch unusable for introducing genuinely new metric names through config (it could only re-register an existing `TestName`, and even that path was broken by the bug above). Loosened to `TestName | str`.
+
+### Changed
+- `metrics/__init__.py` — both new registries merged into `_BUILTIN_REGISTRY` via `.update()`, same pattern as the 47-algorithm merge, with a collision guard that raises at import time if any new name overlaps an existing one. Total registry: 117 metrics.
+- `config.py` — `MetricConfig.name` type changed from `TestName` to `TestName | str`; new `metric_name_value()` helper added since `.value` doesn't exist on a plain `str` and Pydantic's smart-union validation resolves *every* `MetricConfig.name` to plain `str` now, not just names outside the enum.
+- `cli.py` — `--metrics` parsing no longer rejects names outside `TestName` outright; falls back to checking `registry.available` (a stronger typo check than the enum alone, since it validates against the live registry). Four `m.name.value` display/lookup sites switched to `metric_name_value()`.
+- `runner.py` — one `m.name.value` site switched to `metric_name_value()`.
+
+### Notes
+- No `TestName` enum entries were added for the 43 gap-closure metrics — they're reachable via `registry.get(name)` and, after the `MetricConfig.name` fix, via `MetricConfig`/`verity run --metrics` as plain strings. Promoting them to real enum members is a separate decision.
+- Two existing `EvalConfig` validators (`ragas_consolidation_delta` snapshot requirement, `session_level`/`longitudinal` out-of-scope check) needed no code change despite the `MetricConfig.name` type change — `TestName` subclasses `str`, so equality/membership checks against a plain-string `m.name` still work. Re-verified with real `EvalConfig` construction, not just by inspection.
+- `trust_calibration_metrics` is named distinctly from the existing `calibration` `TestName` (RAGAS-answer-confidence calibration) to avoid a registry collision — same general idea (confidence-vs-outcome), different contract. Worth a naming/consolidation pass before any future `TestName` promotion.
 
 ---
 

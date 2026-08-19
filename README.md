@@ -6,7 +6,7 @@ Verity provides a reproducible evaluation harness for RAG architectures — CLI-
 
 > *Trust, measured.*
 
-[![Tests](https://img.shields.io/badge/tests-253%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-299%2F308%20passing-yellow)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![Version](https://img.shields.io/badge/version-0.5.0-blue)]()
@@ -308,7 +308,7 @@ registry.register("my_metric", MyCustomMetric)
 
 ## Metric Registry
 
-Verity's registry contains **74 registered metrics** across four groups.
+Verity's registry contains **117 registered metrics** across five groups.
 
 ### Core — Implemented (21)
 
@@ -371,7 +371,29 @@ metrics:
 
 **Security (15):** `owasp_llm_top_10_compliance_audit`, `mitre_atlas_threat_mapping`, `indirect_prompt_injection_web_content`, `differential_privacy_compliance_testing`, `adversarial_retrieval_ranking_manipulation`, `embedding_inversion_attack_testing`, `supply_chain_integrity_verification`, `adversarial_document_chunking_attacks`, `cross_encoder_reranking_robustness`, `api_rate_limiting_abuse_detection`, `model_extraction_attack_resistance`, `cryptographic_audit_log_integrity`, `semantic_similarity_label_leakage_detection`, `red_team_coverage_matrix`, `adversarial_hyperparameter_search`
 
-### Scaffolded — Tier 3 (frontier research, 2)
+### Gap-Closure Conformance Pass — 43 metrics (`gap_closure_expansion.py`, `gap_algorithms_expansion.py`)
+
+43 additional metrics from two staging packages (`verity_gap_closure`, `verity_gap_algorithms`), rebuilt as real `HeuristicMetric` subclasses against the live `BaseMetric` interface. All heuristic (no scaffolds in this batch) and all registered in `MetricsRegistry`.
+
+**Corrigibility (4):** `shutdown_compliance_rate`, `correction_acceptance_rate`, `intervention_cost`, `corrigibility_robustness`
+
+**Goal misgeneralization / specification gaming (4):** `goal_generalization_gap`, `proxy_preference_rate`, `specification_gaming_severity`, `counterfactual_goal_consistency`
+
+**Alignment faking (4):** `evaluation_condition_behavior_gap`, `strategic_compliance_rate`, `condition_leakage_adjusted_gap`, `alignment_faking_persistence`
+
+**Sandbagging (5):** `targeted_underperformance_gap`, `selective_sandbagging_index`, `noise_induced_capability_uplift`, `answer_distribution_anomaly`, `item_response_inconsistency`
+
+**Scalable oversight (4):** `performance_gap_recovered`, `oversight_uplift`, `error_discovery_recall`, `false_approval_rate`
+
+**LatentIDS cross-architecture / probe robustness (3):** `layer_normalized_transfer`, `probe_distribution_shift_robustness`, `cross_architecture_probe_validation` — the latter two share a single AUROC core (`_probe_robustness_core.py`) rather than each reimplementing rank-based AUROC independently.
+
+**OWASP / agent / application security (13):** `secure_utility`, `unauthorized_tool_call_rate`, `data_exfiltration_rate`, `payload_propagation_rate`, `sanitizer_bypass_rate`, `retrieval_poison_dominance`, `provenance_completeness`, `secret_recovery_rate`, `excessive_agency_risk`, `verification_invocation_rate`, `resource_amplification`, `prompt_leakage_score`, `retrieval_isolation_score`
+
+**Judging / provenance infrastructure (6):** `reliability_weighted_judge_consensus`, `scenario_adaptive_jailbreak_scoring`, `turns_to_exploit`, `trust_calibration_metrics`, `cross_category_regression_diff`, `canonical_manifest_hash_verification`
+
+Every metric in this batch operates on structured episode/trial/judge-vote/probe-score/manifest data passed via `**kwargs` rather than on RAG `(question, contexts, answer, ground_truth)` content — `question`/`answer` are still required by `validate_inputs()` but are placeholders, not the real signal. None of these 43 have `TestName` enum entries yet; they're reachable via `registry.get(name)` directly and, since `MetricConfig.name` accepts `TestName | str`, via `MetricConfig`/`verity run --metrics` as well.
+
+
 
 | Metric | Research Question |
 |--------|------------------|
@@ -595,7 +617,7 @@ eval_engine/
   dataset_manifest.py       ← SHA-256 content hashing + lineage tracking
   comparison.py             ← Run diff engine (verity compare)
 
-  metrics/                  ← 74 registered metrics (21 core + 4 rankers + 47 expansion + 2 Tier 3 scaffolds)
+  metrics/                  ← 117 registered metrics (21 core + 4 rankers + 47 expansion + 43 gap-closure + 2 Tier 3 scaffolds)
   agents/                   ← Proposer → Critic → Judge agents
   orchestration/            ← DebateRound, OversightRunner, Celery tasks
 ```

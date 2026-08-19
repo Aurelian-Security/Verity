@@ -50,7 +50,7 @@ jobs:
       - name: Install dev dependencies
         run: pip install -e ".[dev]"
       - name: Run tests
-        run: pytest eval_engine/tests/ -v --tb=short -m "not live"
+        run: pytest eval_engine/tests/ -v --tb=short -m "not live and not slow"
 
   build:
     name: Build Check

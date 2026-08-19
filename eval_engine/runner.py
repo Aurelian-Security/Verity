@@ -8,7 +8,7 @@ import asyncio, json, logging, time, uuid
 from pathlib import Path
 from typing import Any
 
-from eval_engine.config import EvalConfig
+from eval_engine.config import EvalConfig, metric_name_value
 from eval_engine.cost_tracker import BudgetExceededError, CostTracker
 from eval_engine.metrics import MetricResult, MetricsRegistry, registry as default_registry
 from eval_engine.sanitizer import InputSanitizer
@@ -63,7 +63,10 @@ class RunResult:
             "total_errors": len(self.errors),
             "success_rate": round(self.success_rate, 4),
             "sanitizer_detections": self.sanitizer_summary,
-            "mean_scores": {m.name.value: self.mean_score(m.name.value) for m in self.config.enabled_metrics},
+            "mean_scores": {
+                metric_name_value(m.name): self.mean_score(metric_name_value(m.name))
+                for m in self.config.enabled_metrics
+            },
         }
 
 

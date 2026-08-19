@@ -86,6 +86,27 @@ Verity is **pre-1.0 research infrastructure**. The API is not stable. Breaking c
 
 Heuristic implementations are deterministic, dependency-free, and fully tested. Scaffold implementations follow the standard scaffold contract (`status: "scaffold"`, zero score) and require external models, GPU, or white-box access. **Algorithms 48–50 are not included in this release.**
 
+#### Gap-Closure Conformance Pass — 43 metrics
+
+43 additional metrics from two staging packages (`verity_gap_closure`, `verity_gap_algorithms`), rebuilt against the live `BaseMetric`/`HeuristicMetric` interface (not the reconstructed interface the staging packages were originally built against). All heuristic — no scaffolds in this batch. Registered directly into `_BUILTIN_REGISTRY` (not yet promoted to `TestName` enum entries, though `MetricConfig.name: TestName | str` means they're reachable via `MetricConfig`/CLI as plain strings already).
+
+| Domain | Count | Status |
+|--------|-------|--------|
+| Corrigibility | 4 | 4 heuristic |
+| Goal misgeneralization / spec gaming | 4 | 4 heuristic |
+| Alignment faking | 4 | 4 heuristic |
+| Sandbagging | 5 | 5 heuristic |
+| Scalable oversight | 4 | 4 heuristic |
+| LatentIDS cross-architecture / probe robustness | 3 | 3 heuristic |
+| OWASP / agent / application security | 13 | 13 heuristic |
+| Judging / provenance infrastructure | 6 | 6 heuristic |
+| **Total** | **43** | **43 heuristic, 0 scaffold** |
+
+`probe_distribution_shift_robustness` and `cross_architecture_probe_validation` share a single rank-based AUROC core (`_probe_robustness_core.py`) rather than each reimplementing the same math — a coexistence refactor verified against both metrics' original independent implementations via regression tests.
+
+Input shape note: unlike most of the 47-algorithm expansion registry, this batch operates almost entirely on structured episode/trial/judge-vote/probe-score/manifest data passed via `**kwargs`, not on RAG `(question, contexts, answer, ground_truth)` content. See `gap_closure_expansion.py`/`gap_algorithms_expansion.py` module docstrings.
+
+
 #### Scaffolded — Tier 3 (2 metrics, frontier research prerequisites)
 
 These metrics have `BaseMetric`-compliant interfaces registered in the registry. Their `.score()` methods return placeholder `MetricResult` objects with `status: "scaffold"` in metadata.
@@ -196,7 +217,9 @@ These metrics have `BaseMetric`-compliant interfaces registered in the registry.
 
 | Item | Status | Notes |
 |---|---|---|
-| `pytest` test suite (253 tests) | ✅ Passing | Unit + integration; 253/253 green |
+| `pytest` test suite (308 tests) | ⚠️ 299/308 passing | 9 known failures tracked separately — see below |
+
+> 9 pre-existing failures: 2 in `test_latent_susceptibility.py` (LatentIDS metric registration gap) and 5 in `test_oversight_runner.py`/`test_phase4.py` (typer/click version incompatibility). Both tracked in the Verity engineering backlog (Notion).
 | `ruff` linting | ✅ Passing | |
 | `mypy` type checking | ⚠️ Non-blocking | Known union-attr issues with Anthropic SDK types |
 
